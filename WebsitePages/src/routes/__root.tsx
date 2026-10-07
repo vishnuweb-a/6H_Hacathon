@@ -12,8 +12,10 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
-import { KeptProvider } from '@/lib/kept-context';
-import { KeptHeader, KeptFooter } from '@/components/kept-shared';
+import { KeptProvider } from "@/lib/kept-context";
+import { AuthProvider } from "@/lib/auth-context";
+import { fetchAuthState } from "@/lib/supabase/get-session";
+import { KeptHeader, KeptFooter } from "@/components/kept-shared";
 
 function NotFoundComponent() {
   return (
@@ -75,18 +77,32 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   );
 }
 
-export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
+export type RouterAuthState = { isAuthenticated: boolean; userId: string | null };
+
+export const Route = createRootRouteWithContext<{
+  queryClient: QueryClient;
+  auth: RouterAuthState;
+}>()({
+  // Resolved once per document on the server and reused by every protected route's
+  // beforeLoad, so a refresh lands on the right screen without a signed-out flash.
+  beforeLoad: async () => ({ auth: await fetchAuthState() }),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Kept — Campus Lost & Found" },
-      { name: "description", content: "Lost it. Find it. Get it back. Your campus lost and found community." },
+      {
+        name: "description",
+        content: "Lost it. Find it. Get it back. Your campus lost and found community.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
-      { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap' },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap",
+      },
       {
         rel: "stylesheet",
         href: appCss,
@@ -119,7 +135,13 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <KeptProvider><KeptHeader/><Outlet /><KeptFooter/></KeptProvider>
+      <AuthProvider>
+        <KeptProvider>
+          <KeptHeader />
+          <Outlet />
+          <KeptFooter />
+        </KeptProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -53,6 +53,8 @@ blob-report/
 # ---- Supabase local ----
 supabase/.branches/
 supabase/.temp/
+**/supabase/.branches/
+**/supabase/.temp/
 
 # ---- Logs ----
 logs/

@@ -212,14 +212,29 @@ export interface UpdateListingInput {
   longitude?: number | null | undefined;
 }
 
-/** docs/apiAndDataContracts.md §29 — Explore filtering for this phase. */
+/** docs/apiAndDataContracts.md §29 — the full documented Explore filter set. */
 export interface ExploreFilters {
   query?: string | undefined;
   listingType?: ListingType | "ALL" | undefined;
   category?: string | undefined;
+  /** Inclusive `event_date` lower bound (YYYY-MM-DD) — when the item was lost/found. */
+  dateFrom?: string | undefined;
+  /** Inclusive `event_date` upper bound (YYYY-MM-DD). */
+  dateTo?: string | undefined;
   locationQuery?: string | undefined;
-  sort?: "NEWEST" | "OLDEST" | undefined;
+  sort?: ExploreSort | undefined;
 }
+
+/**
+ * docs/apiAndDataContracts.md §29 — the MVP ordering set.
+ *
+ * NEAREST and RELEVANCE are named in requirements.md FR-EXPLORE-004 but are
+ * deliberately not here: proximity ranking needs coordinates the public board must
+ * never receive, and relevance ranking belongs with the matching engine.
+ */
+export type ExploreSort = "NEWEST" | "OLDEST";
+
+export const EXPLORE_SORTS = ["NEWEST", "OLDEST"] as const;
 
 /** docs/apiAndDataContracts.md §30, §31. */
 export interface CursorPage<T> {
@@ -230,6 +245,82 @@ export interface CursorPage<T> {
 
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 50;
+
+// ---------------------------------------------------------------------------
+// Explore cursor (docs/apiAndDataContracts.md §30)
+// ---------------------------------------------------------------------------
+
+/**
+ * The ordering key of the last row on a page.
+ *
+ * `created_at` alone is not unique — two listings posted in the same millisecond
+ * share it — so a cursor carrying only the timestamp would either repeat or skip
+ * the tied rows at a page boundary. Pairing it with the primary key makes the sort
+ * total and the cursor exact (skill: supabase-postgres-best-practices,
+ * data-pagination).
+ */
+export interface ExploreCursor {
+  createdAt: string;
+  id: string;
+}
+
+/** Opaque to callers by contract (§30: `cursor?: string`), so it is serialised. */
+export function encodeExploreCursor(cursor: ExploreCursor): string {
+  return `${cursor.createdAt}|${cursor.id}`;
+}
+
+/**
+ * Returns null for anything malformed rather than throwing: a cursor arrives from
+ * a URL, so a user-edited value must degrade to "first page", never to an error.
+ */
+export function decodeExploreCursor(raw: string | null | undefined): ExploreCursor | null {
+  if (!raw) return null;
+  const separator = raw.lastIndexOf("|");
+  if (separator <= 0) return null;
+  const createdAt = raw.slice(0, separator);
+  const id = raw.slice(separator + 1);
+  if (!createdAt || !id) return null;
+  if (Number.isNaN(Date.parse(createdAt))) return null;
+  if (!UUID_PATTERN.test(id)) return null;
+  return { createdAt, id };
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Canonical filter shape, used for query keys and before hitting the service.
+ *
+ * Normalising in one place keeps two spellings of the same search — `""` vs
+ * `undefined`, `"ALL"` vs absent, `"  hoodie "` vs `"hoodie"` — from producing two
+ * different TanStack Query cache entries for one result set.
+ */
+export function normalizeExploreFilters(filters: ExploreFilters = {}): ExploreFilters {
+  const normalized: ExploreFilters = {};
+  const query = filters.query?.trim();
+  if (query) normalized.query = query;
+  if (filters.listingType && filters.listingType !== "ALL") {
+    normalized.listingType = filters.listingType;
+  }
+  const category = filters.category?.trim();
+  if (category && category !== "ALL") normalized.category = category;
+  if (isIsoDate(filters.dateFrom)) normalized.dateFrom = filters.dateFrom;
+  if (isIsoDate(filters.dateTo)) normalized.dateTo = filters.dateTo;
+  const locationQuery = filters.locationQuery?.trim();
+  if (locationQuery) normalized.locationQuery = locationQuery;
+  normalized.sort = filters.sort === "OLDEST" ? "OLDEST" : "NEWEST";
+
+  // A reversed range would silently return nothing; treat it as unset instead.
+  if (normalized.dateFrom && normalized.dateTo && normalized.dateFrom > normalized.dateTo) {
+    delete normalized.dateTo;
+  }
+  return normalized;
+}
+
+export function isIsoDate(value: string | null | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
 
 /** docs/apiAndDataContracts.md §26. */
 export interface CreateListingResult {

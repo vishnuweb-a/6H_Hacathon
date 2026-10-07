@@ -18,6 +18,7 @@ import { getSupabaseBrowserClient } from "../supabase/client";
 import { mapPublicProfile, type PublicProfile } from "./profile-types";
 
 type ItemRow = Database["public"]["Tables"]["items"]["Row"];
+type SearchPublicItemsArgs = Database["public"]["Functions"]["search_public_items"]["Args"];
 /** Only the fields `UpdateListingInput` maps onto are ever set. */
 type ItemUpdate = Pick<
   Database["public"]["Tables"]["items"]["Update"],
@@ -36,6 +37,9 @@ import {
   DEFAULT_PAGE_SIZE,
   MAX_PAGE_SIZE,
   MAX_ITEM_IMAGES,
+  decodeExploreCursor,
+  encodeExploreCursor,
+  normalizeExploreFilters,
   mapListingImage,
   mapListingSummary,
   mapOwnerListingDetail,
@@ -59,9 +63,6 @@ const PUBLIC_ITEM_COLUMNS =
 
 const PROFILE_COLUMNS =
   "id, display_name, username, avatar_url, trust_score, average_rating, rating_count, successful_returns, created_at, updated_at";
-
-/** Statuses that appear on the public board (docs/authAndRls.md §19 SELECT). */
-const DISCOVERABLE_STATUSES = ["ACTIVE"] as const;
 
 async function requireUserId(): Promise<string> {
   const supabase = getSupabaseBrowserClient();
@@ -143,50 +144,60 @@ async function loadCreator(userId: string): Promise<PublicProfile | null> {
 /**
  * Active, publicly discoverable listings for Explore.
  *
- * Basic filtering only — the ranked search architecture belongs to Phase 3. Cursor
- * pagination keyed on `created_at` keeps deep pages O(1)
- * (skill: supabase-postgres-best-practices, data-pagination).
+ * Everything the board narrows by — text, listing type, category, event-date range,
+ * location text, ordering and the page boundary — is applied in PostgreSQL. The
+ * client receives one page and never a set it has to filter down itself
+ * (docs/apiAndDataContracts.md §29–§31).
+ *
+ * Only ACTIVE listings are returned. docs/authAndRls.md §19 permits SELECT on
+ * ACTIVE, RECOVERY_IN_PROGRESS and RETURNED "depending on product decisions"; the
+ * product decision for the board is ACTIVE only, so a listing in recovery, returned,
+ * closed or cancelled cannot surface as an ordinary discovery card. RLS still allows
+ * the owner to read their own rows elsewhere — this is the discovery filter, not the
+ * security boundary.
+ *
+ * Reads go through `public_items_view`, which has no coordinate columns to project,
+ * so no combination of these filters can return a latitude, a longitude, a close
+ * reason or any private verification detail (docs/securityAndService.md §24).
  */
 export async function getExploreItems(
   filters: ExploreFilters = {},
-  options: { limit?: number; cursor?: string | null } = {},
+  options: { limit?: number | undefined; cursor?: string | null | undefined } = {},
 ): Promise<CursorPage<ListingSummary>> {
   const supabase = getSupabaseBrowserClient();
-  const limit = Math.min(options.limit ?? DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
-  const ascending = filters.sort === "OLDEST";
+  const normalized = normalizeExploreFilters(filters);
+  // The RPC clamps this as well; doing it here too keeps the +1 arithmetic below
+  // honest (docs/apiAndDataContracts.md §31).
+  const requested = options.limit ?? DEFAULT_PAGE_SIZE;
+  const limit = Math.min(Math.max(Math.trunc(requested) || DEFAULT_PAGE_SIZE, 1), MAX_PAGE_SIZE);
+  const cursor = decodeExploreCursor(options.cursor);
 
-  let query = supabase
-    .from("public_items_view")
-    .select(PUBLIC_ITEM_COLUMNS)
-    .in("status", DISCOVERABLE_STATUSES)
-    .order("created_at", { ascending })
-    // Fetch one extra row to detect a further page without a count query.
-    .limit(limit + 1);
+  // One extra row, to learn whether a further page exists without a count query.
+  // The RPC's own maximum is 50, so asking for limit + 1 at the maximum page size
+  // would silently lose the probe row — hence the explicit ceiling here.
+  const probeLimit = Math.min(limit + 1, MAX_PAGE_SIZE + 1);
 
-  if (filters.listingType && filters.listingType !== "ALL") {
-    query = query.eq("listing_type", filters.listingType);
+  // An unset filter must be an ABSENT argument, not an explicit undefined, so the
+  // function's own `default null` applies.
+  const args: SearchPublicItemsArgs = {
+    p_sort: normalized.sort ?? "NEWEST",
+    p_limit: probeLimit,
+  };
+  if (normalized.query) args.p_query = normalized.query;
+  if (normalized.listingType && normalized.listingType !== "ALL") {
+    args.p_listing_type = normalized.listingType;
   }
-  if (filters.category) {
-    query = query.eq("category", filters.category);
-  }
-  if (filters.locationQuery) {
-    query = query.ilike("location_text", `%${filters.locationQuery}%`);
-  }
-  if (filters.query) {
-    // Escape PostgREST's `or` delimiters so a comma or parenthesis in the search
-    // text cannot alter the filter expression.
-    const safe = filters.query.replace(/[,()\\]/g, " ").trim();
-    if (safe.length > 0) {
-      query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
-    }
-  }
-  if (options.cursor) {
-    query = ascending
-      ? query.gt("created_at", options.cursor)
-      : query.lt("created_at", options.cursor);
+  if (normalized.category) args.p_category = normalized.category;
+  if (normalized.dateFrom) args.p_date_from = normalized.dateFrom;
+  if (normalized.dateTo) args.p_date_to = normalized.dateTo;
+  if (normalized.locationQuery) args.p_location_query = normalized.locationQuery;
+  if (cursor) {
+    args.p_cursor_created_at = cursor.createdAt;
+    args.p_cursor_id = cursor.id;
   }
 
-  const { data, error } = await query;
+  const { data, error } = await supabase.rpc("search_public_items", args);
+
   if (error) {
     throw new Error("We could not load the board just now.");
   }
@@ -196,19 +207,21 @@ export async function getExploreItems(
   const page = hasMore ? rows.slice(0, limit) : rows;
 
   const [images, creatorNames] = await Promise.all([
-    loadImagesForItems(page.map((row) => row.id as string)),
-    loadCreatorNames(page.map((row) => row.user_id as string)),
+    loadImagesForItems(page.map((row) => row.id)),
+    loadCreatorNames(page.map((row) => row.user_id)),
   ]);
 
+  const last = page.at(-1);
   return {
     data: page.map((row) =>
       mapListingSummary(
         row,
-        images.get(row.id as string)?.[0]?.url ?? null,
-        creatorNames.get(row.user_id as string) ?? null,
+        images.get(row.id)?.[0]?.url ?? null,
+        creatorNames.get(row.user_id) ?? null,
       ),
     ),
-    nextCursor: hasMore ? ((page.at(-1)?.created_at as string | undefined) ?? null) : null,
+    nextCursor:
+      hasMore && last ? encodeExploreCursor({ createdAt: last.created_at, id: last.id }) : null,
     hasMore,
   };
 }

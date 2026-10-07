@@ -6,7 +6,15 @@
  * state — nothing here is mirrored into `kept-context`.
  */
 
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseInfiniteQueryResult,
+  type InfiniteData,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -22,6 +30,7 @@ import {
   updateMyItem,
   uploadItemImages,
 } from "@/lib/services/listing-service";
+import { normalizeExploreFilters } from "@/lib/services/listing-types";
 import type {
   CreateFoundListingInput,
   CreateListingResult,
@@ -40,22 +49,62 @@ import type {
  */
 export const listingKeys = {
   all: ["listings"] as const,
-  explore: (filters: ExploreFilters) => ["listings", "explore", filters] as const,
+  /**
+   * Filters are normalised into the key, so `?q=hoodie` and `?q=%20hoodie%20`
+   * share one cache entry while two genuinely different boards never do. `limit`
+   * is part of the key because it changes the page contents, not just their count.
+   */
+  explore: (filters: ExploreFilters, limit?: number) =>
+    ["listings", "explore", normalizeExploreFilters(filters), limit ?? null] as const,
   detail: (itemId: string) => ["listings", "detail", itemId] as const,
   ownerDetail: (itemId: string) => ["listings", "owner-detail", itemId] as const,
   mine: (userId: string | null, listingType?: "LOST" | "FOUND") =>
     ["listings", "mine", userId, listingType ?? "ALL"] as const,
 };
 
+/**
+ * A single page of the board.
+ *
+ * Kept for the surfaces that want exactly one bounded read — the Home strip — so
+ * they do not pull in pagination they never use.
+ */
 export function useExploreItems(
   filters: ExploreFilters = {},
+  options: { limit?: number | undefined } = {},
 ): UseQueryResult<CursorPage<ListingSummary>> {
   const { isConfigured, isAuthenticated } = useAuth();
 
   return useQuery({
-    queryKey: listingKeys.explore(filters),
-    queryFn: () => getExploreItems(filters),
+    queryKey: listingKeys.explore(filters, options.limit),
+    queryFn: () => getExploreItems(filters, { limit: options.limit }),
     // Explore is behind auth in the MVP scope (docs/authAndRls.md §105).
+    enabled: isConfigured && isAuthenticated,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * The paginated board.
+ *
+ * `getNextPageParam` hands back the opaque composite cursor the service minted for
+ * the last row of the page, so paging is keyset and stays O(1) at depth. A null
+ * cursor is the end of the board and stops TanStack Query asking for more.
+ *
+ * Changing a filter changes the query key, which starts a fresh first page — so
+ * pagination resets on a new search without any manual bookkeeping.
+ */
+export function useInfiniteExploreItems(
+  filters: ExploreFilters = {},
+  options: { limit?: number | undefined } = {},
+): UseInfiniteQueryResult<InfiniteData<CursorPage<ListingSummary>>, Error> {
+  const { isConfigured, isAuthenticated } = useAuth();
+
+  return useInfiniteQuery({
+    queryKey: listingKeys.explore(filters, options.limit),
+    queryFn: ({ pageParam }) =>
+      getExploreItems(filters, { limit: options.limit, cursor: pageParam }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => (lastPage.hasMore ? lastPage.nextCursor : null),
     enabled: isConfigured && isAuthenticated,
     staleTime: 30_000,
   });

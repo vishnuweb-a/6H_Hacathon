@@ -1,5 +1,5 @@
-import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -27,7 +27,19 @@ import {
 } from "./kept-listing-ui";
 import { items, dateLabel } from "@/lib/kept-data";
 import { useAuth } from "@/lib/auth-context";
-import { useExploreItems, useItem, useMyItemDetail } from "@/hooks/use-listings";
+import {
+  useExploreItems,
+  useInfiniteExploreItems,
+  useItem,
+  useMyItemDetail,
+} from "@/hooks/use-listings";
+import {
+  clearedExploreSearch,
+  hasActiveExploreFilters,
+  searchToExploreFilters,
+  validateExploreSearch,
+  type ExploreSearch,
+} from "@/lib/explore-search";
 import {
   CATEGORY_LABELS,
   ITEM_CATEGORIES,
@@ -37,6 +49,15 @@ import {
   type ListingType,
 } from "@/lib/services/listing-types";
 
+/**
+ * How many listings the landing strip asks the database for.
+ *
+ * The strip shows four. It reads the same Explore service as the board — one
+ * source of truth for listings — but with its own limit, so the home page costs a
+ * four-row page rather than a full Explore page it would then throw away.
+ */
+const HOME_STRIP_SIZE = 4;
+
 export function HomePage() {
   const [tab, setTab] = useState<ListingType | "ALL">("ALL");
   // The landing hero art is static editorial imagery from the approved design, not
@@ -45,9 +66,7 @@ export function HomePage() {
     data: fresh,
     isPending: freshPending,
     isError: freshError,
-  } = useExploreItems({
-    listingType: tab,
-  });
+  } = useExploreItems({ listingType: tab }, { limit: HOME_STRIP_SIZE });
   return (
     <main>
       <section className="grid-paper border-b-2 border-foreground">
@@ -255,7 +274,7 @@ export function HomePage() {
           />
         ) : (fresh?.data.length ?? 0) > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {fresh?.data.slice(0, 4).map((listing) => (
+            {fresh?.data.map((listing) => (
               <ListingCard key={listing.id} listing={listing} />
             ))}
           </div>
@@ -303,44 +322,77 @@ export function HomePage() {
 /**
  * The campus board, backed by real Supabase data.
  *
- * Filters stay in local state and are passed down into the query key, so changing a
- * filter is a refetch rather than client-side slicing of a full table. Only ACTIVE
- * listings are returned (the service pins the discoverable status set), so a closed
- * or cancelled listing cannot appear here.
+ * Filter state is the URL (`useSearch` / `navigate({ search })`), not component
+ * state: a reload, a Back step and a shared link all rebuild the same board. The
+ * only local state is the uncommitted text in the search box, which is debounced
+ * into the URL so typing does not push a request or a history entry per keystroke.
  *
- * Phase 2 keeps the existing basic filter UI only; ranked search is Phase 3.
+ * Every narrowing happens in PostgreSQL. The query key carries the normalised
+ * filters, so changing one starts a new first page rather than slicing a cached
+ * set, and only ACTIVE listings are discoverable (pinned in the service) — a
+ * closed, cancelled, returned or in-recovery listing cannot appear here.
  */
 export function ExplorePage() {
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [type, setType] = useState<ListingType | "ALL">("ALL");
-  const [category, setCategory] = useState("ALL");
-  const [sort, setSort] = useState<"NEWEST" | "OLDEST">("NEWEST");
-  const [list, setList] = useState(false);
+  const search = useSearch({ from: "/explore" });
+  const navigate = useNavigate({ from: "/explore" });
 
-  // Debounced so typing does not fire a request per keystroke.
+  // The input is the one piece of state the URL should lag behind: it updates per
+  // keystroke, the URL updates once typing settles.
+  const [queryInput, setQueryInput] = useState(search.q ?? "");
+
+  const setSearch = useCallback(
+    (patch: Partial<ExploreSearch>) => {
+      void navigate({
+        search: (prev: ExploreSearch) => validateExploreSearch({ ...prev, ...patch }),
+        // Filtering is not a navigation someone wants to step back through one
+        // control at a time, but the resulting board must still be shareable.
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  // Back/Forward and pasted links are authoritative: when the URL's q changes from
+  // outside this component, the box follows it.
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    setQueryInput(search.q ?? "");
+  }, [search.q]);
+
+  const committedQuery = search.q ?? "";
+  useEffect(() => {
+    const trimmed = queryInput.trim();
+    if (trimmed === committedQuery) return;
+    const timer = setTimeout(() => setSearch({ q: trimmed || undefined }), 300);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [queryInput, committedQuery, setSearch]);
 
-  const filters: ExploreFilters = {
-    query: debouncedQuery || undefined,
-    listingType: type,
-    category: category === "ALL" ? undefined : category,
-    sort,
-  };
+  const filters = useMemo(() => searchToExploreFilters(search), [search]);
+  const list = search.view === "list";
+  const type = search.type ?? "ALL";
+  const category = search.category ?? "ALL";
+  const sort = search.sort ?? "NEWEST";
 
-  const { data, isPending, isError, refetch, isFetching } = useExploreItems(filters);
-  const listings = data?.data ?? [];
-  const hasFilters = Boolean(debouncedQuery) || type !== "ALL" || category !== "ALL";
+  const {
+    data,
+    isPending,
+    isError,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = useInfiniteExploreItems(filters, { limit: search.limit });
+
+  const listings = useMemo(() => data?.pages.flatMap((page) => page.data) ?? [], [data]);
+  const hasFilters = hasActiveExploreFilters(search);
+  // A refetch of the filters, as distinct from loading another page: the former
+  // dims the grid, neither blanks it.
+  const isFilterTransition = isFetching && !isFetchingNextPage && !isPending;
 
   const clearFilters = () => {
-    setQuery("");
-    setDebouncedQuery("");
-    setType("ALL");
-    setCategory("ALL");
-    setSort("NEWEST");
+    setQueryInput("");
+    void navigate({ search: () => clearedExploreSearch(search), replace: true });
   };
 
   return (
@@ -357,16 +409,23 @@ export function ExplorePage() {
       }
     >
       <div className="panel p-5 mb-8">
-        <div className="relative mb-5">
+        <form
+          className="relative mb-5"
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSearch({ q: queryInput.trim() || undefined });
+          }}
+        >
           <Search className="absolute left-4 top-3.5" size={20} aria-hidden="true" />
           <input
             className="field pl-12"
             aria-label="Search items"
             placeholder="Hoodie, calculator, water bottle..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            value={queryInput}
+            onChange={(e) => setQueryInput(e.target.value)}
           />
-        </div>
+        </form>
         <div className="flex flex-wrap gap-3">
           <div className="flex gap-1" role="group" aria-label="Listing type">
             {(
@@ -380,7 +439,7 @@ export function ExplorePage() {
                 key={value}
                 variant={type === value ? "lime" : "outline"}
                 aria-pressed={type === value}
-                onClick={() => setType(value)}
+                onClick={() => setSearch({ type: value === "ALL" ? undefined : value })}
               >
                 {label}
               </Button>
@@ -389,7 +448,9 @@ export function ExplorePage() {
           <select
             aria-label="Category"
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) =>
+              setSearch({ category: e.target.value === "ALL" ? undefined : e.target.value })
+            }
             className="field w-auto flex-1 min-w-36"
           >
             <option value="ALL">All categories</option>
@@ -402,19 +463,62 @@ export function ExplorePage() {
           <select
             aria-label="Sort order"
             value={sort}
-            onChange={(e) => setSort(e.target.value === "OLDEST" ? "OLDEST" : "NEWEST")}
+            onChange={(e) =>
+              setSearch({ sort: e.target.value === "OLDEST" ? "OLDEST" : undefined })
+            }
             className="field w-auto flex-1 min-w-36"
           >
             <option value="NEWEST">Newest first</option>
             <option value="OLDEST">Oldest first</option>
           </select>
         </div>
+        <details className="mt-4" open={Boolean(search.from ?? search.to ?? search.location)}>
+          <summary className="eyebrow cursor-pointer inline-flex items-center gap-2 select-none">
+            <SlidersHorizontal size={14} aria-hidden="true" />
+            MORE FILTERS
+          </summary>
+          <div className="flex flex-wrap gap-3 mt-4">
+            <label className="flex-1 min-w-44">
+              <span className="eyebrow block mb-2">Where</span>
+              <input
+                className="field"
+                aria-label="Filter by location"
+                placeholder="Library, canteen, hostel..."
+                defaultValue={search.location ?? ""}
+                onBlur={(e) => setSearch({ location: e.target.value.trim() || undefined })}
+              />
+            </label>
+            {/* event_date — when the thing was lost or found, not when it was posted. */}
+            <label className="flex-1 min-w-36">
+              <span className="eyebrow block mb-2">Lost / found after</span>
+              <input
+                type="date"
+                className="field"
+                aria-label="Lost or found on or after"
+                value={search.from ?? ""}
+                max={search.to ?? undefined}
+                onChange={(e) => setSearch({ from: e.target.value || undefined })}
+              />
+            </label>
+            <label className="flex-1 min-w-36">
+              <span className="eyebrow block mb-2">Lost / found before</span>
+              <input
+                type="date"
+                className="field"
+                aria-label="Lost or found on or before"
+                value={search.to ?? ""}
+                min={search.from ?? undefined}
+                onChange={(e) => setSearch({ to: e.target.value || undefined })}
+              />
+            </label>
+          </div>
+        </details>
       </div>
       <div className="flex justify-between items-center mb-5">
         <span className="eyebrow" aria-live="polite">
           {isPending
             ? "LOADING THE BOARD…"
-            : `${listings.length}${data?.hasMore ? "+" : ""} ITEMS ON THE BOARD`}
+            : `${listings.length}${hasNextPage ? "+" : ""} ITEMS ON THE BOARD`}
         </span>
         <div className="flex gap-2">
           <Button
@@ -422,7 +526,7 @@ export function ExplorePage() {
             variant={!list ? "lime" : "outline"}
             aria-label="Grid view"
             aria-pressed={!list}
-            onClick={() => setList(false)}
+            onClick={() => setSearch({ view: undefined })}
           >
             <Grid2X2 />
           </Button>
@@ -431,7 +535,7 @@ export function ExplorePage() {
             variant={list ? "lime" : "outline"}
             aria-label="List view"
             aria-pressed={list}
-            onClick={() => setList(true)}
+            onClick={() => setSearch({ view: "list" })}
           >
             <List />
           </Button>
@@ -439,7 +543,7 @@ export function ExplorePage() {
       </div>
       {isPending ? (
         <ListingGridSkeleton list={list} />
-      ) : isError ? (
+      ) : isError && !listings.length ? (
         <ListingErrorState
           title="The board did not load."
           description="We could not reach the board just now. Nothing is lost — try again."
@@ -451,21 +555,47 @@ export function ExplorePage() {
             className={
               list ? "grid gap-4" : "grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
             }
-            aria-busy={isFetching}
+            aria-busy={isFilterTransition}
+            // The current page stays on screen while the next filter resolves —
+            // dimmed, not blanked.
+            style={isFilterTransition ? { opacity: 0.6 } : undefined}
           >
             {listings.map((listing) => (
               <ListingCard key={listing.id} listing={listing} list={list} />
             ))}
           </div>
-          {data?.hasMore && (
+          {isFetchingNextPage && (
+            <div className="mt-5">
+              <ListingGridSkeleton list={list} count={4} />
+            </div>
+          )}
+          {/* A failed Load More keeps the rows already on the board. */}
+          {isFetchNextPageError && (
+            <p className="eyebrow text-pink mt-7 text-center" role="alert">
+              THAT PAGE DID NOT LOAD. TRY AGAIN.
+            </p>
+          )}
+          {hasNextPage ? (
+            <div className="flex justify-center mt-7">
+              <Button
+                variant="lime"
+                size="lg"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? "Loading…" : isFetchNextPageError ? "Try again" : "Load more"}
+                {!isFetchingNextPage && <ArrowRight />}
+              </Button>
+            </div>
+          ) : (
             <p className="eyebrow text-muted-foreground mt-7 text-center">
-              SHOWING THE MOST RECENT ITEMS. NARROW YOUR SEARCH TO SEE MORE.
+              THAT’S EVERYTHING ON THE BOARD.
             </p>
           )}
         </>
       ) : hasFilters ? (
         <ListingEmptyState
-          title="Nothing here just yet."
+          title="Nothing matches that search."
           description="Try a different search or clear the filters."
           action={
             <Button variant="lime" onClick={clearFilters}>

@@ -1,6 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ExplorePage } from "@/components/kept-board-pages";
+import { validateExploreSearch } from "@/lib/explore-search";
+
+/**
+ * Explore's filter state is URL state (docs/frontendArchitecture.md — search params
+ * own shareable screen state). `validateExploreSearch` is total, so a hand-edited
+ * or stale link normalises to a valid board rather than throwing.
+ */
 export const Route = createFileRoute("/explore")({
+  validateSearch: validateExploreSearch,
   head: () => ({
     meta: [
       { title: "The campus board — Kept" },

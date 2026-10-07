@@ -4,7 +4,6 @@ import { useState, type ReactNode } from "react";
 import { Button } from "./ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useSignOut } from "@/hooks/use-auth-mutations";
-import { dateLabel, type Item } from "@/lib/kept-data";
 
 export function KeptHeader() {
   const { isAuthenticated } = useAuth();
@@ -172,52 +171,6 @@ export function Badge({ children, tone = "lime" }: { children: ReactNode; tone?:
     >
       {children}
     </span>
-  );
-}
-export function ItemCard({ item, list = false }: { item: Item; list?: boolean }) {
-  return (
-    <Link
-      to="/listing/$id"
-      params={{ id: item.id }}
-      className={`panel group transition-transform hover:-translate-y-1 ${list ? "flex" : ""}`}
-    >
-      <div
-        className={`relative overflow-hidden ${list ? "w-40 min-w-32" : "h-52"} ${item.id === "hoodie" ? "bg-pink/20" : item.id === "bottle" ? "bg-mint/30" : item.id === "calculator" ? "bg-purple/15" : "bg-orange/15"}`}
-      >
-        <img
-          src={item.image}
-          alt={item.title}
-          width={512}
-          height={512}
-          loading="lazy"
-          className="item-photo"
-        />
-        <span className="absolute top-3 left-3">
-          <Badge tone={item.type === "Lost" ? "pink" : "lime"}>
-            {item.type === "Lost" ? "↗ LOST" : "↙ FOUND"}
-          </Badge>
-        </span>
-      </div>
-      <div className="p-4 flex-1">
-        <div className="eyebrow text-muted-foreground mb-2">{item.category}</div>
-        <h3 className="font-bold text-lg flex justify-between gap-3">
-          {item.title}
-          <ArrowUpRight className="shrink-0" size={18} />
-        </h3>
-        <p className="text-xs mt-3 flex gap-1.5 items-center">
-          <MapPin size={13} />
-          {item.location}
-          <span className="ml-auto font-mono text-[10px]">{dateLabel(item.date)}</span>
-        </p>
-        <div className="flex items-center gap-2 text-[11px] border-t border-foreground/15 pt-3 mt-3">
-          <span className="w-5 h-5 rounded-full bg-foreground text-primary-foreground grid place-content-center text-[8px]">
-            {item.initials}
-          </span>
-          {item.person}
-          <ShieldCheck size={13} className="ml-auto" />
-        </div>
-      </div>
-    </Link>
   );
 }
 export function TrustNote({

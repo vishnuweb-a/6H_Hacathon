@@ -449,7 +449,11 @@ Use a separate table such as:
 
 ```text
 found_item_private_details
+lost_item_private_details
 ```
+
+One per listing side: the Finder's verification basis and the Owner's
+distinguishing characteristics. Both are owner-only and carry the same fields.
 
 Possible fields:
 
@@ -629,6 +633,8 @@ items
 item_images
 
 found_item_private_details
+
+lost_item_private_details
 
 verification_questions
 

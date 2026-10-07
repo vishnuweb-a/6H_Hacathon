@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowUpRight,
   ArrowRight,
@@ -15,13 +15,39 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "./ui/button";
-import { Page, Badge, ItemCard, Tabs, SectionHeading, TrustNote } from "./kept-shared";
-import { items, categories, locations, dateLabel, type Item } from "@/lib/kept-data";
-import { useKept } from "@/lib/kept-context";
+import { Skeleton } from "./ui/skeleton";
+import { Page, Badge, Tabs, SectionHeading, TrustNote } from "./kept-shared";
+import {
+  ListingCard,
+  ListingErrorState,
+  ListingGridSkeleton,
+  ListingImage as ListingPhoto,
+  ListingEmptyState,
+  listingDateLabel,
+} from "./kept-listing-ui";
+import { items, dateLabel } from "@/lib/kept-data";
+import { useAuth } from "@/lib/auth-context";
+import { useExploreItems, useItem, useMyItemDetail } from "@/hooks/use-listings";
+import {
+  CATEGORY_LABELS,
+  ITEM_CATEGORIES,
+  STATUS_LABELS,
+  categoryLabel,
+  type ExploreFilters,
+  type ListingType,
+} from "@/lib/services/listing-types";
 
 export function HomePage() {
-  const [tab, setTab] = useState("All items");
-  const { reports } = useKept();
+  const [tab, setTab] = useState<ListingType | "ALL">("ALL");
+  // The landing hero art is static editorial imagery from the approved design, not
+  // listing data. The board strip below it reads real listings.
+  const {
+    data: fresh,
+    isPending: freshPending,
+    isError: freshError,
+  } = useExploreItems({
+    listingType: tab,
+  });
   return (
     <main>
       <section className="grid-paper border-b-2 border-foreground">
@@ -197,15 +223,22 @@ export function HomePage() {
           to="/explore"
         />
         <div className="flex items-center justify-between mb-5">
-          <div className="flex gap-2">
-            {["All items", "Lost", "Found"].map((t) => (
+          <div className="flex gap-2" role="group" aria-label="Listing type">
+            {(
+              [
+                ["ALL", "All items"],
+                ["LOST", "Lost"],
+                ["FOUND", "Found"],
+              ] as const
+            ).map(([value, label]) => (
               <Button
-                key={t}
+                key={value}
                 size="sm"
-                variant={tab === t ? "default" : "outline"}
-                onClick={() => setTab(t)}
+                variant={tab === value ? "default" : "outline"}
+                aria-pressed={tab === value}
+                onClick={() => setTab(value)}
               >
-                {t}
+                {label}
               </Button>
             ))}
           </div>
@@ -213,14 +246,32 @@ export function HomePage() {
             GOOD FINDS. GOOD PEOPLE.
           </span>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {reports
-            .filter((i) => tab === "All items" || i.type === tab)
-            .slice(0, 4)
-            .map((item) => (
-              <ItemCard item={item} key={item.id} />
+        {freshPending ? (
+          <ListingGridSkeleton count={4} />
+        ) : freshError ? (
+          <ListingErrorState
+            title="The board did not load."
+            description="We could not reach the board just now. Try the full board instead."
+          />
+        ) : (fresh?.data.length ?? 0) > 0 ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {fresh?.data.slice(0, 4).map((listing) => (
+              <ListingCard key={listing.id} listing={listing} />
             ))}
-        </div>
+          </div>
+        ) : (
+          <ListingEmptyState
+            title="Nothing on the board yet."
+            description="Be the first to post something lost or found."
+            action={
+              <Button asChild variant="pink">
+                <Link to="/post">
+                  Post an item <ArrowUpRight />
+                </Link>
+              </Button>
+            }
+          />
+        )}
       </section>
       <section className="bg-mint border-y-2 border-foreground">
         <div className="page-width py-9">
@@ -249,25 +300,49 @@ export function HomePage() {
     </main>
   );
 }
+/**
+ * The campus board, backed by real Supabase data.
+ *
+ * Filters stay in local state and are passed down into the query key, so changing a
+ * filter is a refetch rather than client-side slicing of a full table. Only ACTIVE
+ * listings are returned (the service pins the discoverable status set), so a closed
+ * or cancelled listing cannot appear here.
+ *
+ * Phase 2 keeps the existing basic filter UI only; ranked search is Phase 3.
+ */
 export function ExplorePage() {
-  const { reports } = useKept();
   const [query, setQuery] = useState("");
-  const [type, setType] = useState("All items");
-  const [category, setCategory] = useState("All categories");
-  const [location, setLocation] = useState("All locations");
-  const [date, setDate] = useState("Any date");
-  const [status, setStatus] = useState("All statuses");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [type, setType] = useState<ListingType | "ALL">("ALL");
+  const [category, setCategory] = useState("ALL");
+  const [sort, setSort] = useState<"NEWEST" | "OLDEST">("NEWEST");
   const [list, setList] = useState(false);
-  const filtered = reports.filter(
-    (i) =>
-      (type === "All items" || i.type === type) &&
-      (category === "All categories" || i.category === category) &&
-      (location === "All locations" || i.location === location) &&
-      (date === "Any date" ||
-        (date === "Today" ? i.date === "2026-10-07" : i.date >= "2026-10-01")) &&
-      (status === "All statuses" || i.status === status) &&
-      `${i.title} ${i.description}`.toLowerCase().includes(query.toLowerCase()),
-  );
+
+  // Debounced so typing does not fire a request per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const filters: ExploreFilters = {
+    query: debouncedQuery || undefined,
+    listingType: type,
+    category: category === "ALL" ? undefined : category,
+    sort,
+  };
+
+  const { data, isPending, isError, refetch, isFetching } = useExploreItems(filters);
+  const listings = data?.data ?? [];
+  const hasFilters = Boolean(debouncedQuery) || type !== "ALL" || category !== "ALL";
+
+  const clearFilters = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setType("ALL");
+    setCategory("ALL");
+    setSort("NEWEST");
+  };
+
   return (
     <Page
       eyebrow="THE CAMPUS BOARD / 01"
@@ -283,7 +358,7 @@ export function ExplorePage() {
     >
       <div className="panel p-5 mb-8">
         <div className="relative mb-5">
-          <Search className="absolute left-4 top-3.5" size={20} />
+          <Search className="absolute left-4 top-3.5" size={20} aria-hidden="true" />
           <input
             className="field pl-12"
             aria-label="Search items"
@@ -293,40 +368,60 @@ export function ExplorePage() {
           />
         </div>
         <div className="flex flex-wrap gap-3">
-          <div className="flex gap-1">
-            {["All items", "Lost", "Found"].map((t) => (
-              <Button key={t} variant={type === t ? "lime" : "outline"} onClick={() => setType(t)}>
-                {t}
+          <div className="flex gap-1" role="group" aria-label="Listing type">
+            {(
+              [
+                ["ALL", "All items"],
+                ["LOST", "Lost"],
+                ["FOUND", "Found"],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                variant={type === value ? "lime" : "outline"}
+                aria-pressed={type === value}
+                onClick={() => setType(value)}
+              >
+                {label}
               </Button>
             ))}
           </div>
-          {[
-            [category, setCategory, ["All categories", ...categories], "Category"],
-            [location, setLocation, ["All locations", ...locations], "Location"],
-            [date, setDate, ["Any date", "Today", "This week"], "Date"],
-            [status, setStatus, ["All statuses", "Open", "Returned"], "Status"],
-          ].map(([value, setter, options, label]) => (
-            <select
-              key={String(label)}
-              aria-label={String(label)}
-              value={String(value)}
-              onChange={(e) => (setter as (v: string) => void)(e.target.value)}
-              className="field w-auto flex-1 min-w-36"
-            >
-              {(options as string[]).map((o) => (
-                <option key={o}>{o}</option>
-              ))}
-            </select>
-          ))}
+          <select
+            aria-label="Category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="field w-auto flex-1 min-w-36"
+          >
+            <option value="ALL">All categories</option>
+            {ITEM_CATEGORIES.map((value) => (
+              <option key={value} value={value}>
+                {CATEGORY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Sort order"
+            value={sort}
+            onChange={(e) => setSort(e.target.value === "OLDEST" ? "OLDEST" : "NEWEST")}
+            className="field w-auto flex-1 min-w-36"
+          >
+            <option value="NEWEST">Newest first</option>
+            <option value="OLDEST">Oldest first</option>
+          </select>
         </div>
       </div>
       <div className="flex justify-between items-center mb-5">
-        <span className="eyebrow">{filtered.length} ITEMS ON THE BOARD</span>
+        <span className="eyebrow" aria-live="polite">
+          {isPending
+            ? "LOADING THE BOARD…"
+            : `${listings.length}${data?.hasMore ? "+" : ""} ITEMS ON THE BOARD`}
+        </span>
         <div className="flex gap-2">
           <Button
             size="icon"
             variant={!list ? "lime" : "outline"}
             aria-label="Grid view"
+            aria-pressed={!list}
             onClick={() => setList(false)}
           >
             <Grid2X2 />
@@ -335,88 +430,187 @@ export function ExplorePage() {
             size="icon"
             variant={list ? "lime" : "outline"}
             aria-label="List view"
+            aria-pressed={list}
             onClick={() => setList(true)}
           >
             <List />
           </Button>
         </div>
       </div>
-      {filtered.length ? (
-        <div
-          className={
-            list ? "grid gap-4" : "grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
-          }
-        >
-          {filtered.map((item) => (
-            <ItemCard key={item.id} item={item} list={list} />
-          ))}
-        </div>
-      ) : (
-        <div className="panel p-12 text-center">
-          <Search className="mx-auto mb-4" />
-          <h2 className="text-xl font-bold">Nothing here just yet.</h2>
-          <p className="text-muted-foreground mt-2">Try a different search or clear the filters.</p>
-          <Button
-            variant="lime"
-            className="mt-5"
-            onClick={() => {
-              setQuery("");
-              setType("All items");
-              setCategory("All categories");
-              setLocation("All locations");
-              setDate("Any date");
-              setStatus("All statuses");
-            }}
+      {isPending ? (
+        <ListingGridSkeleton list={list} />
+      ) : isError ? (
+        <ListingErrorState
+          title="The board did not load."
+          description="We could not reach the board just now. Nothing is lost — try again."
+          onRetry={() => void refetch()}
+        />
+      ) : listings.length ? (
+        <>
+          <div
+            className={
+              list ? "grid gap-4" : "grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+            }
+            aria-busy={isFetching}
           >
-            Clear filters
-          </Button>
-        </div>
+            {listings.map((listing) => (
+              <ListingCard key={listing.id} listing={listing} list={list} />
+            ))}
+          </div>
+          {data?.hasMore && (
+            <p className="eyebrow text-muted-foreground mt-7 text-center">
+              SHOWING THE MOST RECENT ITEMS. NARROW YOUR SEARCH TO SEE MORE.
+            </p>
+          )}
+        </>
+      ) : hasFilters ? (
+        <ListingEmptyState
+          title="Nothing here just yet."
+          description="Try a different search or clear the filters."
+          action={
+            <Button variant="lime" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          }
+        />
+      ) : (
+        <ListingEmptyState
+          title="The board is empty."
+          description="Be the first to post. Someone out there is looking for their thing."
+          action={
+            <Button asChild variant="pink">
+              <Link to="/post">
+                Post an item <ArrowUpRight />
+              </Link>
+            </Button>
+          }
+        />
       )}
     </Page>
   );
 }
+
+/**
+ * One listing, from real data.
+ *
+ * Two reads, deliberately:
+ *   - `useItem` returns the public projection, which structurally cannot contain
+ *     coordinates or Finder private details.
+ *   - `useMyItemDetail` runs only when the viewer is the creator, and is the only
+ *     path by which private information reaches the client.
+ *
+ * A non-owner never receives the private fields, so there is nothing for the UI to
+ * remember to hide (docs/securityAndService.md §24).
+ */
 export function ListingPage({ id }: { id: string }) {
-  const { reports } = useKept();
-  const item = reports.find((i) => i.id === id);
-  if (!item)
+  const { user } = useAuth();
+  const { data: listing, isPending, isError, refetch } = useItem(id);
+  const isOwner = Boolean(listing && user?.id === listing.userId);
+  const { data: ownerDetail } = useMyItemDetail(id, { enabled: isOwner });
+
+  if (isPending) {
     return (
-      <Page eyebrow="NOT ON THE BOARD" title="Item not found.">
-        <Button asChild>
+      <Page eyebrow="THE BOARD / ITEM" title="Loading…">
+        <div
+          className="grid md:grid-cols-[1.15fr_1fr] gap-9"
+          role="status"
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <span className="sr-only">Loading this item’s details…</span>
+          <Skeleton className="h-[480px] w-full rounded-none" />
+          <div className="space-y-5">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </div>
+      </Page>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Page eyebrow="THE BOARD / ITEM" title="That did not load.">
+        <ListingErrorState onRetry={() => void refetch()} />
+      </Page>
+    );
+  }
+
+  // A listing that does not exist and one the viewer may not see are deliberately
+  // the same screen (docs/apiAndDataContracts.md §96 — error privacy).
+  if (!listing) {
+    return (
+      <Page
+        eyebrow="NOT ON THE BOARD"
+        title="Item not found."
+        description="This item may have been closed, or the link may be wrong."
+      >
+        <Button asChild variant="lime">
           <Link to="/explore">Back to the board</Link>
         </Button>
       </Page>
     );
+  }
+
+  const isLost = listing.listingType === "LOST";
+  const cover = listing.images[0] ?? null;
+  const creator = listing.creator;
+
   return (
     <Page
-      eyebrow={`THE BOARD / ${item.type.toUpperCase()} ITEM`}
-      title={item.title}
+      eyebrow={`THE BOARD / ${listing.listingType} ITEM`}
+      title={listing.title}
       action={
-        <Badge tone={item.type === "Lost" ? "pink" : "lime"}>
-          {item.type} · {item.status}
+        <Badge tone={isLost ? "pink" : "lime"}>
+          {isLost ? "Lost" : "Found"} · {STATUS_LABELS[listing.status]}
         </Badge>
       }
     >
       <div className="grid md:grid-cols-[1.15fr_1fr] gap-9">
-        <div className="panel bg-mint/20 h-[480px]">
-          <img src={item.image} alt={item.title} width={512} height={512} className="item-photo" />
+        <div>
+          <div className="panel bg-mint/20 h-[320px] sm:h-[480px]">
+            <ListingPhoto url={cover?.url ?? null} alt={listing.title} className="h-full w-full" />
+          </div>
+          {listing.images.length > 1 && (
+            <ul className="flex gap-3 mt-4 list-none p-0">
+              {listing.images.slice(1).map((image) => (
+                <li key={image.id} className="w-24 h-24 border-2 border-foreground bg-mint/20">
+                  <ListingPhoto
+                    url={image.url}
+                    alt={`${listing.title} — another view`}
+                    className="h-full w-full"
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
         <div>
           <div className="eyebrow mb-5">
-            {item.category} / POSTED {dateLabel(item.date)}
+            {categoryLabel(listing.category)} / POSTED{" "}
+            {listingDateLabel(listing.createdAt.slice(0, 10))}
           </div>
-          <p className="text-lg leading-relaxed mb-7">{item.description}</p>
+          <p className="text-lg leading-relaxed mb-7 whitespace-pre-line">{listing.description}</p>
+          {(listing.brand || listing.color) && (
+            <p className="eyebrow text-muted-foreground mb-6">
+              {[listing.brand, listing.color].filter(Boolean).join(" · ")}
+            </p>
+          )}
           <div className="border-y-2 border-foreground py-5 grid grid-cols-2 gap-5 mb-6">
             <div>
               <p className="eyebrow text-muted-foreground mb-2">APPROXIMATE LOCATION</p>
               <p className="font-bold flex gap-2">
-                <MapPin size={17} />
-                {item.location}
+                <MapPin size={17} aria-hidden="true" />
+                {listing.locationText}
               </p>
             </div>
             <div>
-              <p className="eyebrow text-muted-foreground mb-2">LAST SEEN / FOUND</p>
+              <p className="eyebrow text-muted-foreground mb-2">{isLost ? "LAST SEEN" : "FOUND"}</p>
               <p className="font-bold">
-                {dateLabel(item.date)} · {item.time}
+                {listingDateLabel(listing.eventDate)}
+                {listing.eventTime ? ` · ${listing.eventTime.slice(0, 5)}` : ""}
               </p>
             </div>
           </div>
@@ -424,31 +618,79 @@ export function ListingPage({ id }: { id: string }) {
             Exact locations and identifying details are kept private. Ownership is verified by the
             finder, not by a match score.
           </TrustNote>
-          <div className="flex gap-4 my-6 items-center">
-            <span className="bg-orange border-2 border-foreground w-12 h-12 rounded-full grid place-content-center font-bold">
-              {item.initials}
-            </span>
-            <div>
-              <p className="font-bold">{item.person}</p>
-              <p className="text-xs flex items-center gap-2 mt-1">
-                <ShieldCheck size={14} />
-                College verified · 96 trust · ★ 4.9
-              </p>
-            </div>
-            <Link to="/profile" className="ml-auto subtle-link">
-              Trust profile
-            </Link>
-          </div>
-          {item.type === "Found" ? (
-            <Button asChild size="lg" variant="pink" className="w-full">
-              <Link to="/claim/$id" params={{ id: item.id }}>
-                This might be mine <ArrowRight />
+          {creator && (
+            <div className="flex gap-4 my-6 items-center">
+              <span className="bg-orange border-2 border-foreground w-12 h-12 rounded-full grid place-content-center font-bold">
+                {creator.displayName.slice(0, 2).toUpperCase()}
+              </span>
+              <div>
+                <p className="font-bold">{creator.displayName}</p>
+                <p className="text-xs flex items-center gap-2 mt-1">
+                  <ShieldCheck size={14} aria-hidden="true" />
+                  {Math.round(creator.trustScore)} trust
+                  {creator.averageRating !== null && ` · ★ ${creator.averageRating.toFixed(1)}`}
+                </p>
+              </div>
+              <Link to="/profile" className="ml-auto subtle-link">
+                Trust profile
               </Link>
-            </Button>
-          ) : (
+            </div>
+          )}
+          {/* Owner-only. The private block renders from `ownerDetail`, which a
+              non-owner is never given. */}
+          {isOwner && ownerDetail ? (
+            <div className="grid gap-4">
+              {ownerDetail.privateDetails && (
+                <div className="bg-purple/10 p-4 border-2 border-foreground">
+                  <Badge tone="purple">PRIVATE · ONLY YOU SEE THIS</Badge>
+                  <dl className="text-sm mt-3 grid gap-2">
+                    {(
+                      [
+                        ["Private notes", ownerDetail.privateDetails.privateNotes],
+                        ["Serial fragment", ownerDetail.privateDetails.serialFragment],
+                        ["Unique markings", ownerDetail.privateDetails.uniqueMarkings],
+                        ["Contents", ownerDetail.privateDetails.privateContents],
+                      ] as const
+                    )
+                      .filter(([, value]) => Boolean(value))
+                      .map(([label, value]) => (
+                        <div key={label}>
+                          <dt className="eyebrow text-muted-foreground">{label}</dt>
+                          <dd className="mt-1">{value}</dd>
+                        </div>
+                      ))}
+                  </dl>
+                </div>
+              )}
+              {ownerDetail.verificationQuestions.length > 0 && (
+                <div className="border-2 border-foreground p-4">
+                  <Badge tone="purple">YOUR VERIFICATION QUESTIONS</Badge>
+                  <ol className="text-sm mt-3 grid gap-2 pl-5">
+                    {ownerDetail.verificationQuestions.map((question) => (
+                      <li key={question.id}>{question.question}</li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              <Button asChild variant="outline" size="lg" className="w-full">
+                <Link to="/activity">Manage this listing</Link>
+              </Button>
+            </div>
+          ) : listing.status !== "ACTIVE" ? (
+            <p className="text-sm font-bold">
+              This listing is {STATUS_LABELS[listing.status].toLowerCase()} and is no longer
+              accepting claims.
+            </p>
+          ) : isLost ? (
             <Button asChild size="lg" variant="lime" className="w-full">
               <Link to="/post/found">
                 I found something like this <ArrowRight />
+              </Link>
+            </Button>
+          ) : (
+            <Button asChild size="lg" variant="pink" className="w-full">
+              <Link to="/claim/$id" params={{ id: listing.id }}>
+                This might be mine <ArrowRight />
               </Link>
             </Button>
           )}
@@ -460,6 +702,7 @@ export function ListingPage({ id }: { id: string }) {
     </Page>
   );
 }
+
 export function MatchesPage() {
   const [tab, setTab] = useState("All matches");
   return (

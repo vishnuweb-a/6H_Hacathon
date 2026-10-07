@@ -327,6 +327,8 @@ item_images
 
 found_item_private_details
 
+lost_item_private_details
+
 verification_questions
 
 matches
@@ -624,9 +626,15 @@ Use separate storage:
 
 ```text
 found_item_private_details
+lost_item_private_details
 ```
 
 rather than mixing private verification data into public listing payloads.
+
+Each side of a listing keeps its private evidence in its own owner-only table: the
+Finder's in `found_item_private_details`, the Owner's distinguishing
+characteristics in `lost_item_private_details`. Neither is reachable by the other
+party, and neither is a matching input.
 
 ---
 
@@ -650,7 +658,14 @@ unique_markings
 verification answers
 ```
 
-Security must not depend on React simply hiding fields.
+These column names apply to both `found_item_private_details` and
+`lost_item_private_details`.
+
+Security must not depend on React simply hiding fields. In this implementation the
+boundary is structural: `public_items_view` does not select the coordinate columns,
+and `authenticated` holds no table-level SELECT on `items` at all — only a
+column-level grant that excludes `latitude`, `longitude`, `closed_reason` and
+`closed_at`.
 
 ---
 

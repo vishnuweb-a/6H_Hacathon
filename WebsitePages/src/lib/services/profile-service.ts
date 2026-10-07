@@ -69,9 +69,13 @@ export async function updateCurrentProfile(input: UpdateProfileInput): Promise<M
 
   const { data, error } = await supabase
     .rpc("update_my_profile", {
-      p_display_name: input.displayName ?? null,
-      p_username: input.username ?? null,
-      p_avatar_url: input.avatarPath ?? null,
+      // Each SQL argument defaults to null ("leave unchanged"), so an absent field
+      // is left out of the payload entirely rather than sent as a null the
+      // generated Args type forbids. Clearing a value goes through the dedicated
+      // p_clear_* flags below, not through a null.
+      ...(input.displayName ? { p_display_name: input.displayName } : {}),
+      ...(input.username ? { p_username: input.username } : {}),
+      ...(input.avatarPath ? { p_avatar_url: input.avatarPath } : {}),
       p_clear_username: input.username === null,
       p_clear_avatar_url: input.avatarPath === null,
     })

@@ -936,6 +936,69 @@ college ID inside wallet
 
 ---
 
+# 22b. Lost Item Private Details Table
+
+Table:
+
+```text
+lost_item_private_details
+```
+
+Purpose:
+
+Stores the Owner's private distinguishing characteristics for a LOST listing — the
+details only the person who lost the item would know.
+
+This is the LOST-side mirror of `found_item_private_details` and is equally
+sensitive. The approved LOST wizard collects the same four fields the FOUND wizard
+collects, so the two tables share a shape.
+
+This table must only apply to LOST listings.
+
+Privacy:
+
+```text
+owner-only
+never in public_items_view
+never in Explore
+never in public listing detail
+never in matching explanations
+not used as a matching input
+```
+
+These values are ownership evidence for later claim verification. A Finder must
+never be shown them, or an ownership question answers itself. The Claims phase
+compares a claimant's statement against them server-side; it does not reveal them.
+
+Columns:
+
+```text
+item_id
+private_notes
+serial_fragment
+unique_markings
+private_contents
+created_at
+updated_at
+```
+
+---
+
+## lost_item_private_details.item_id
+
+```text
+uuid
+primary key
+references items(id)
+on delete cascade
+```
+
+One private-detail record per Lost Report. The parent must be a LOST listing; this
+is enforced by the `assert_parent_item_type()` trigger, because a foreign key cannot
+express a condition on the parent's `listing_type`.
+
+---
+
 # 23. Verification Questions Table
 
 Table:
@@ -2542,6 +2605,16 @@ items.user_id
 ---
 
 ## found_item_private_details
+
+Owned indirectly through:
+
+```text
+items.user_id
+```
+
+---
+
+## lost_item_private_details
 
 Owned indirectly through:
 

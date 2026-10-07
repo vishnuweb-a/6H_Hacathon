@@ -657,9 +657,78 @@ Claimants must never receive direct SELECT access to:
 
 ```text
 found_item_private_details
+lost_item_private_details
 ```
 
 The verification flow should compare user answers with Finder knowledge without revealing expected answers.
+
+---
+
+# 25b. Lost Item Private Details RLS
+
+Table:
+
+```text
+lost_item_private_details
+```
+
+The LOST-side mirror of §24, and equally sensitive: it holds the Owner's private
+ownership evidence.
+
+---
+
+## SELECT
+
+Only:
+
+```text
+Owner who created the Lost Report
+```
+
+Conceptual condition:
+
+```text
+items.user_id = auth.uid()
+AND
+items.listing_type = LOST
+```
+
+---
+
+## INSERT
+
+Only the Owner creating/owning the Lost Report.
+
+---
+
+## UPDATE
+
+Only the Owner.
+
+---
+
+## DELETE
+
+Only the Owner, or through a controlled listing-cleanup flow.
+
+---
+
+## Ownership derivation
+
+Ownership is never taken from a client-supplied user id. The table carries no user
+column at all: ownership resolves through the parent item.
+
+```text
+item_id -> items.user_id -> auth.uid()
+```
+
+The `user_owns_item()` helper performs that lookup. A second authenticated user
+fails it and receives nothing; an anonymous caller has no policy and no grant, so it
+is denied twice over.
+
+A Finder must never receive direct SELECT access to this table. The Claims phase
+compares a claimant's statement against these values server-side without revealing
+them — the same rule §25 applies to the FOUND side.
 
 ---
 

@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
-import { Page, Badge, Tabs, ItemCard, TrustNote } from "./kept-shared";
+import { Page, Badge, Tabs, TrustNote } from "./kept-shared";
+import { MyListings } from "./kept-my-listings";
 import { useKept } from "@/lib/kept-context";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -31,6 +32,7 @@ import {
   useUpdateProfile,
 } from "@/hooks/use-auth-mutations";
 import type { MyProfile, UpdateProfileInput } from "@/lib/services/profile-types";
+import { useMyItems } from "@/hooks/use-listings";
 import { items, getItem } from "@/lib/kept-data";
 
 /**
@@ -201,8 +203,13 @@ function ProfileEditor({
 }
 
 export function ActivityPage() {
-  const { reports, claims, handedOver, received } = useKept();
+  // Listings are real. Claims, matches, recoveries and returns remain mock until
+  // their own phases — they are labelled as a preview in the UI below so a visitor
+  // cannot read them as backend truth.
+  const { claims, handedOver, received } = useKept();
   const [tab, setTab] = useState("My Lost Reports");
+  const { data: lostReports } = useMyItems("LOST");
+  const { data: foundListings } = useMyItems("FOUND");
   const options = [
     "My Lost Reports",
     "My Found Listings",
@@ -226,8 +233,8 @@ export function ActivityPage() {
     >
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          ["02", "LOST REPORTS", "bg-pink"],
-          ["03", "FOUND LISTINGS", "bg-mint"],
+          [String(lostReports?.length ?? "\u2014"), "LOST REPORTS", "bg-pink"],
+          [String(foundListings?.length ?? "\u2014"), "FOUND LISTINGS", "bg-mint"],
           [
             String(claims.filter((c) => c.status === "Pending").length),
             "PENDING CLAIMS",
@@ -243,15 +250,10 @@ export function ActivityPage() {
       </div>
       <Tabs options={options} value={tab} onChange={setTab} />
       {tab === "My Lost Reports" || tab === "My Found Listings" ? (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {reports
-            .filter((i) => i.type === (tab === "My Lost Reports" ? "Lost" : "Found"))
-            .map((i) => (
-              <ItemCard key={i.id} item={i} />
-            ))}
-        </div>
+        <MyListings listingType={tab === "My Lost Reports" ? "LOST" : "FOUND"} />
       ) : tab === "Possible Matches" ? (
         <div className="grid gap-5">
+          <PreviewNotice feature="Matching" />
           {[items[0], items[5]].map((i, n) => (
             <Link
               key={i.id}
@@ -270,6 +272,7 @@ export function ActivityPage() {
         </div>
       ) : tab === "Claims Sent" || tab === "Claims Received" ? (
         <div className="grid gap-4">
+          <PreviewNotice feature="Claims" />
           {claims
             .filter((c) => c.direction === (tab === "Claims Sent" ? "Sent" : "Received"))
             .map((c) => (
@@ -288,33 +291,53 @@ export function ActivityPage() {
             ))}
         </div>
       ) : (
-        <div className="panel p-6 flex flex-wrap gap-5 items-center">
-          <img src={items[0].image} alt={items[0].title} className="w-24 h-24 object-cover" />
-          <div className="flex-1">
-            <Badge tone="mint">
-              {tab === "Completed Returns" ? "Returned" : "Ownership verified"}
-            </Badge>
-            <h2 className="text-xl font-bold mt-3">
-              {tab === "Completed Returns" ? "Student ID card" : "Grey oversized hoodie"}
-            </h2>
-            <p className="text-xs mt-2">One more thing, back with its person.</p>
+        <div className="grid gap-4">
+          <PreviewNotice feature={tab === "Completed Returns" ? "Returns" : "Recovery"} />
+          <div className="panel p-6 flex flex-wrap gap-5 items-center">
+            <img src={items[0].image} alt={items[0].title} className="w-24 h-24 object-cover" />
+            <div className="flex-1">
+              <Badge tone="mint">
+                {tab === "Completed Returns" ? "Returned" : "Ownership verified"}
+              </Badge>
+              <h2 className="text-xl font-bold mt-3">
+                {tab === "Completed Returns" ? "Student ID card" : "Grey oversized hoodie"}
+              </h2>
+              <p className="text-xs mt-2">One more thing, back with its person.</p>
+            </div>
+            {tab === "Completed Returns" ? (
+              <Button asChild variant="lime">
+                <Link to="/returned/$id" params={{ id: "id-card" }}>
+                  Return & review <ArrowRight />
+                </Link>
+              </Button>
+            ) : (
+              <Button asChild variant="lime">
+                <Link to="/recovery/$id" params={{ id: "hoodie" }}>
+                  Continue recovery <ArrowRight />
+                </Link>
+              </Button>
+            )}
           </div>
-          {tab === "Completed Returns" ? (
-            <Button asChild variant="lime">
-              <Link to="/returned/$id" params={{ id: "id-card" }}>
-                Return & review <ArrowRight />
-              </Link>
-            </Button>
-          ) : (
-            <Button asChild variant="lime">
-              <Link to="/recovery/$id" params={{ id: "hoodie" }}>
-                Continue recovery <ArrowRight />
-              </Link>
-            </Button>
-          )}
         </div>
       )}
     </Page>
+  );
+}
+
+/**
+ * Marks a surface that still renders sample data, so a visitor is never shown a
+ * mock record as though the backend produced it. Each of these disappears when its
+ * phase lands.
+ */
+function PreviewNotice({ feature }: { feature: string }) {
+  return (
+    <div className="flex gap-3 bg-orange/20 border-2 border-foreground p-4 text-sm">
+      <Sparkles className="shrink-0" size={20} aria-hidden="true" />
+      <div>
+        <b>{feature} is not switched on yet.</b> The examples below are sample data, not your real
+        activity. Your reports and listings above are real.
+      </div>
+    </div>
   );
 }
 const notifications = [

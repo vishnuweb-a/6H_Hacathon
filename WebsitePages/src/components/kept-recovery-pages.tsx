@@ -17,11 +17,17 @@ import {
 import { Button } from "./ui/button";
 import { Page, Badge, Tabs, TrustNote } from "./kept-shared";
 import { getItem } from "@/lib/kept-data";
+import { getDemoItem } from "@/lib/demo-fixtures";
 import { useKept, type ClaimStatus } from "@/lib/kept-context";
 
+/**
+ * Claim submission is a later phase. The screen still renders its approved design
+ * from isolated demo fixtures, so it is never wired to a real listing id — a real
+ * item reaching this screen would look like a working claim flow when none exists.
+ */
 export function ClaimPage({ id }: { id: string }) {
-  const { reports, addClaim } = useKept();
-  const item = reports.find((i) => i.id === id);
+  const { addClaim } = useKept();
+  const item = getDemoItem(id);
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState(["", "", ""]);
   const [sent, setSent] = useState(false);
@@ -32,8 +38,12 @@ export function ClaimPage({ id }: { id: string }) {
   ];
   if (!item)
     return (
-      <Page eyebrow="CLAIM" title="Item not found.">
-        <Button asChild>
+      <Page
+        eyebrow="CLAIM"
+        title="Claims are not switched on yet."
+        description="Posting and browsing work today. Submitting an ownership claim arrives in the next release, together with the verification flow that protects both sides."
+      >
+        <Button asChild variant="lime">
           <Link to="/explore">Back to the board</Link>
         </Button>
       </Page>

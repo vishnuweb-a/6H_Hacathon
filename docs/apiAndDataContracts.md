@@ -475,12 +475,15 @@ For Found Listings, private data should remain a separate object.
 
 ---
 
-# 22. Found Private Details DTO
+# 22. Listing Private Details DTO
 
-Only available to the Finder who owns the Found Listing.
+Only available to the member who owns the listing: the Finder of a FOUND listing, or
+the Owner of a LOST report.
+
+Both sides carry the same four fields, so one DTO serves both:
 
 ```ts
-interface FoundPrivateDetails {
+interface ListingPrivateDetails {
   itemId: UUID;
   privateNotes: string | null;
   serialFragment: string | null;
@@ -488,6 +491,30 @@ interface FoundPrivateDetails {
   privateContents: string | null;
 }
 ```
+
+Sourced from `found_item_private_details` for a FOUND listing and from
+`lost_item_private_details` for a LOST one.
+
+---
+
+# 22b. Owner Private Lost Details
+
+The LOST wizard's private distinguishing characteristics are persisted, not
+discarded. They travel as `privateDetails` on `CreateLostReportInput` (§24) and are
+written to `lost_item_private_details`.
+
+They are never returned to anyone but the Owner:
+
+```text
+absent from public_items_view
+absent from ListingSummary
+absent from PublicListingDetail
+absent from matching explanations
+not a matching input
+```
+
+They appear only on `OwnerListingDetail` (§21), which is built from the owner-only
+`get_my_item_detail()` RPC plus an owner-only child read.
 
 ---
 
@@ -521,6 +548,15 @@ interface CreateLostReportInput {
   locationText: string;
   latitude?: number | null;
   longitude?: number | null;
+
+  // Private distinguishing characteristics (§22b). Persisted to
+  // lost_item_private_details. Never published.
+  privateDetails?: {
+    privateNotes?: string | null;
+    serialFragment?: string | null;
+    uniqueMarkings?: string | null;
+    privateContents?: string | null;
+  };
 }
 ```
 
@@ -531,6 +567,9 @@ user_id
 listing_type = LOST
 status = ACTIVE
 ```
+
+If the private details cannot be stored, the report is cancelled rather than
+published without the ownership evidence a later claim is verified against.
 
 ---
 

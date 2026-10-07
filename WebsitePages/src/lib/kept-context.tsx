@@ -1,13 +1,18 @@
 /**
  * Prototype client state for features that do not have a backend yet.
  *
- * Phase 1 removed the mock `signedIn` flag from here: authentication and the current
- * profile are now real Supabase state, owned by `auth-context.tsx` and the profile
- * query hooks. Everything that remains below (listings, claims, chat, handover,
- * rating) is still mock data and is replaced in its own later phase.
+ * Phase 1 removed the mock `signedIn` flag: authentication and the current profile
+ * are real Supabase state, owned by `auth-context.tsx` and the profile query hooks.
+ *
+ * Phase 2 removed `reports` / `addReport`: listings are real Supabase state, owned
+ * by TanStack Query through `hooks/use-listings.ts`. Nothing here mirrors them, so
+ * there is exactly one owner of listing data.
+ *
+ * What remains (claims, chat, handover, rating) is still mock and is replaced in
+ * its own later phase. The item fixtures those screens reference now live in
+ * `demo-fixtures.ts`.
  */
 import { createContext, useContext, useState, type ReactNode } from "react";
-import { seedItems, type Item } from "./kept-data";
 
 export type ClaimStatus = "Pending" | "Accepted" | "Rejected" | "Cancelled" | "Completed";
 export type Claim = {
@@ -19,8 +24,6 @@ export type Claim = {
   answers: string[];
 };
 type KeptState = {
-  reports: Item[];
-  addReport: (item: Item) => void;
   claims: Claim[];
   addClaim: (itemId: string, answers: string[]) => void;
   updateClaim: (id: string, status: ClaimStatus) => void;
@@ -35,7 +38,6 @@ type KeptState = {
 };
 const KeptContext = createContext<KeptState | null>(null);
 export function KeptProvider({ children }: { children: ReactNode }) {
-  const [reports, setReports] = useState<Item[]>(seedItems);
   const [claims, setClaims] = useState<Claim[]>([
     {
       id: "claim-1",
@@ -93,8 +95,6 @@ export function KeptProvider({ children }: { children: ReactNode }) {
   return (
     <KeptContext.Provider
       value={{
-        reports,
-        addReport: (item) => setReports((prev) => [item, ...prev]),
         claims,
         addClaim: (itemId, answers) =>
           setClaims((prev) => [

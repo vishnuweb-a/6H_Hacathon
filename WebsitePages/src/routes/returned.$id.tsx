@@ -5,9 +5,9 @@ export const Route = createFileRoute("/returned/$id")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "A successful return — Kept" },
+      { title: "A successful return — Scout" },
       { name: "description", content: "Celebrate a return and share a trusted review." },
-      { property: "og:title", content: "A successful return — Kept" },
+      { property: "og:title", content: "A successful return — Scout" },
       { property: "og:description", content: "Celebrate a return and share a trusted review." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

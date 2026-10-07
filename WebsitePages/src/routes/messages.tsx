@@ -5,12 +5,12 @@ export const Route = createFileRoute("/messages")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Recovery conversations — Kept" },
+      { title: "Recovery conversations — Scout" },
       {
         name: "description",
         content: "Keep your recovery conversations private and plan safe handovers.",
       },
-      { property: "og:title", content: "Recovery conversations — Kept" },
+      { property: "og:title", content: "Recovery conversations — Scout" },
       {
         property: "og:description",
         content: "Keep your recovery conversations private and plan safe handovers.",

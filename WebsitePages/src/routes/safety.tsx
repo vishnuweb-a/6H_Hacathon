@@ -3,12 +3,12 @@ import { SafetyPage } from "@/components/kept-account-pages";
 export const Route = createFileRoute("/safety")({
   head: () => ({
     meta: [
-      { title: "Safety and privacy — Kept" },
+      { title: "Safety and privacy — Scout" },
       {
         name: "description",
         content: "Privacy-conscious ownership checks and safe campus handovers.",
       },
-      { property: "og:title", content: "Safety and privacy — Kept" },
+      { property: "og:title", content: "Safety and privacy — Scout" },
       {
         property: "og:description",
         content: "Privacy-conscious ownership checks and safe campus handovers.",

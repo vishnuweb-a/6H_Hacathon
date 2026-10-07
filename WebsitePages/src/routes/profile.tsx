@@ -5,12 +5,12 @@ export const Route = createFileRoute("/profile")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Your trust profile — Kept" },
+      { title: "Your trust profile — Scout" },
       {
         name: "description",
         content: "See verified returns, community ratings and kindness badges.",
       },
-      { property: "og:title", content: "Your trust profile — Kept" },
+      { property: "og:title", content: "Your trust profile — Scout" },
       {
         property: "og:description",
         content: "See verified returns, community ratings and kindness badges.",

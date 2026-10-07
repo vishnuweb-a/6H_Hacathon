@@ -621,7 +621,7 @@ export function ReportPage({ kind }: { kind: "lost" | "found" }) {
                   </legend>
                   <p className="text-sm mb-4">
                     Ask something only the owner could answer. You will compare the answers yourself
-                    — Kept never decides a claim for you.
+                    — Scout never decides a claim for you.
                   </p>
                   <div className="grid gap-3">
                     {questions.map((question, index) => (
@@ -737,7 +737,7 @@ export function ReportPage({ kind }: { kind: "lost" | "found" }) {
                 )}
               </div>
               <TrustNote>
-                People verify ownership. Kept suggests matches, never confirms them automatically.
+                People verify ownership. Scout suggests matches, never confirms them automatically.
               </TrustNote>
             </div>
           )}

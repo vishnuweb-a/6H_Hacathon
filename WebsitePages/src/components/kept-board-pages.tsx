@@ -853,7 +853,7 @@ export function ListingPage({ id }: { id: string }) {
             </Button>
           )}
           <p className="text-xs text-muted-foreground mt-3">
-            No contact details shared. Keep the conversation on Kept.
+            No contact details shared. Keep the conversation on Scout.
           </p>
         </div>
       </div>

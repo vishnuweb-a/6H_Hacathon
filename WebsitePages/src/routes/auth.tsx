@@ -18,12 +18,12 @@ export const Route = createFileRoute("/auth")({
   }),
   head: () => ({
     meta: [
-      { title: "Campus sign in — Kept" },
-      { name: "description", content: "Join the Kept verified-college community prototype." },
-      { property: "og:title", content: "Campus sign in — Kept" },
+      { title: "Campus sign in — Scout" },
+      { name: "description", content: "Join the Scout verified-college community prototype." },
+      { property: "og:title", content: "Campus sign in — Scout" },
       {
         property: "og:description",
-        content: "Join the Kept verified-college community prototype.",
+        content: "Join the Scout verified-college community prototype.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

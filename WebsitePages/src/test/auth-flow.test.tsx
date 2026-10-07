@@ -141,7 +141,7 @@ describe("AuthPage sign in", () => {
     await user.type(screen.getByLabelText(/display name/i), "Ananya Sharma");
     await user.type(screen.getByLabelText(/college email/i), "ananya@college.edu");
     await user.type(screen.getByLabelText(/^password/i), "a-good-long-password");
-    await user.click(screen.getByRole("button", { name: /join kept/i }));
+    await user.click(screen.getByRole("button", { name: /join scout/i }));
 
     expect(await screen.findByRole("status")).toHaveTextContent(/confirm your email/i);
     expect(navigateMock).not.toHaveBeenCalled();

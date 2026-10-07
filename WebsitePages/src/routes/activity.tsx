@@ -5,9 +5,9 @@ export const Route = createFileRoute("/activity")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Your campus activity — Kept" },
+      { title: "Your campus activity — Scout" },
       { name: "description", content: "Manage reports, matches, claims and completed returns." },
-      { property: "og:title", content: "Your campus activity — Kept" },
+      { property: "og:title", content: "Your campus activity — Scout" },
       {
         property: "og:description",
         content: "Manage reports, matches, claims and completed returns.",

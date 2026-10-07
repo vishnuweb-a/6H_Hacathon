@@ -5,6 +5,25 @@ import { Button } from "./ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { useSignOut } from "@/hooks/use-auth-mutations";
 
+function ScoutLogo({ className }: { className: string }) {
+  const [failed, setFailed] = useState(false);
+  return failed ? (
+    <span className={`font-extrabold text-4xl ${className}`}>scout</span>
+  ) : (
+    <img
+      ref={(image) => {
+        if (image?.complete && image.naturalWidth === 0) setFailed(true);
+      }}
+      src="/scout-wordmark.png"
+      alt="Scout"
+      width={956}
+      height={284}
+      className={`block h-auto max-w-full object-contain mix-blend-multiply dark:invert dark:mix-blend-screen ${className}`}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 export function KeptHeader() {
   const { isAuthenticated } = useAuth();
   const signOutMutation = useSignOut();
@@ -21,10 +40,10 @@ export function KeptHeader() {
         <div className="page-width h-24 flex items-center justify-between gap-4">
           <Link
             to="/"
-            className="font-extrabold text-5xl flex items-center gap-1"
-            aria-label="Kept home"
+            className="inline-flex min-h-11 shrink-0 items-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+            aria-label="Scout home"
           >
-            kept<span className="text-pink">✳</span>
+            <ScoutLogo className="w-32 sm:w-36 lg:w-32 xl:w-40" />
           </Link>
           <nav className="hidden lg:flex items-center gap-1">
             <Link to="/explore" className="nav-link">
@@ -122,8 +141,12 @@ export function KeptFooter() {
     <footer className="border-t-2 border-foreground mt-16">
       <div className="page-width py-9 flex flex-wrap items-center justify-between gap-6">
         <div>
-          <Link to="/" className="text-3xl font-extrabold">
-            kept✳
+          <Link
+            to="/"
+            aria-label="Scout home"
+            className="inline-flex min-h-11 items-center focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
+          >
+            <ScoutLogo className="w-32" />
           </Link>
           <p className="text-xs mt-1">Lost it. Find it. Get it back.</p>
         </div>

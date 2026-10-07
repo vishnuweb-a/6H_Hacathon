@@ -12,12 +12,12 @@ export const Route = createFileRoute("/matches")({
   },
   head: () => ({
     meta: [
-      { title: "Your possible matches — Kept" },
+      { title: "Your possible matches — Scout" },
       {
         name: "description",
         content: "Review ranked potential matches. Similarity is not proof of ownership.",
       },
-      { property: "og:title", content: "Your possible matches — Kept" },
+      { property: "og:title", content: "Your possible matches — Scout" },
       {
         property: "og:description",
         content: "Review ranked potential matches. Similarity is not proof of ownership.",

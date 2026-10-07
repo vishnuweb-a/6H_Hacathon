@@ -90,7 +90,7 @@ export const Route = createRootRouteWithContext<{
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Kept — Campus Lost & Found" },
+      { title: "Scout — Campus Lost & Found" },
       {
         name: "description",
         content: "Lost it. Find it. Get it back. Your campus lost and found community.",
@@ -107,7 +107,9 @@ export const Route = createRootRouteWithContext<{
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/scout-icon.png", type: "image/png", sizes: "256x256" },
+      { rel: "icon", href: "/favicon.ico", type: "image/x-icon", sizes: "48x48" },
+      { rel: "apple-touch-icon", href: "/apple-touch-icon.png", sizes: "180x180" },
     ],
   }),
   shellComponent: RootShell,

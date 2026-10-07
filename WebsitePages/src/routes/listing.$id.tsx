@@ -3,12 +3,12 @@ import { ListingPage } from "@/components/kept-board-pages";
 export const Route = createFileRoute("/listing/$id")({
   head: () => ({
     meta: [
-      { title: "Item details — Kept" },
+      { title: "Item details — Scout" },
       {
         name: "description",
         content: "View public item details and start a private ownership claim.",
       },
-      { property: "og:title", content: "Item details — Kept" },
+      { property: "og:title", content: "Item details — Scout" },
       {
         property: "og:description",
         content: "View public item details and start a private ownership claim.",

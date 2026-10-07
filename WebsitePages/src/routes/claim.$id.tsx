@@ -5,9 +5,9 @@ export const Route = createFileRoute("/claim/$id")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Claim an item — Kept" },
+      { title: "Claim an item — Scout" },
       { name: "description", content: "Answer private questions so a human can verify ownership." },
-      { property: "og:title", content: "Claim an item — Kept" },
+      { property: "og:title", content: "Claim an item — Scout" },
       {
         property: "og:description",
         content: "Answer private questions so a human can verify ownership.",

@@ -5,9 +5,9 @@ export const Route = createFileRoute("/notifications")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Your notifications — Kept" },
+      { title: "Your notifications — Scout" },
       { name: "description", content: "Keep up with matches, claims and recovery updates." },
-      { property: "og:title", content: "Your notifications — Kept" },
+      { property: "og:title", content: "Your notifications — Scout" },
       { property: "og:description", content: "Keep up with matches, claims and recovery updates." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

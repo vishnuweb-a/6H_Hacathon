@@ -658,7 +658,7 @@ export function SafetyPage() {
                 "Identifying marks and claim answers stay private. Hide names and ID numbers in photos.",
               ],
               [
-                "Keep it on Kept.",
+                "Keep it on Scout.",
                 "No public phone numbers or email addresses. Talk through in-app messages.",
               ],
               [
@@ -909,7 +909,7 @@ export function AuthPage() {
                 : "Creating your account…"
               : tab === "Sign in"
                 ? "Sign in"
-                : "Join Kept"}
+                : "Join Scout"}
             <ArrowRight />
           </Button>
           {tab === "Sign in" && (

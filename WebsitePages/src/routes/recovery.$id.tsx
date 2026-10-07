@@ -5,9 +5,9 @@ export const Route = createFileRoute("/recovery/$id")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Recovery timeline — Kept" },
+      { title: "Recovery timeline — Scout" },
       { name: "description", content: "Follow the return and confirm a safe handover." },
-      { property: "og:title", content: "Recovery timeline — Kept" },
+      { property: "og:title", content: "Recovery timeline — Scout" },
       { property: "og:description", content: "Follow the return and confirm a safe handover." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

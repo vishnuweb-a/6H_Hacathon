@@ -5,9 +5,9 @@ export const Route = createFileRoute("/post/found")({
   beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Report a found item — Kept" },
+      { title: "Report a found item — Scout" },
       { name: "description", content: "Help an item get home with public and private details." },
-      { property: "og:title", content: "Report a found item — Kept" },
+      { property: "og:title", content: "Report a found item — Scout" },
       {
         property: "og:description",
         content: "Help an item get home with public and private details.",

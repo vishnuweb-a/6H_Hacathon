@@ -4,12 +4,12 @@ import { HomePage } from "@/components/kept-board-pages";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Kept — Lost it. Find it. Get it back." },
+      { title: "Scout — Lost it. Find it. Get it back." },
       {
         name: "description",
         content: "Find your lost things and help campus belongings get back to their people.",
       },
-      { property: "og:title", content: "Kept — Campus Lost & Found" },
+      { property: "og:title", content: "Scout — Campus Lost & Found" },
       {
         property: "og:description",
         content: "Lost something? Check the board. A little community goes a long way.",

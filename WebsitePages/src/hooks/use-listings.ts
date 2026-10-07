@@ -17,6 +17,7 @@ import {
 } from "@tanstack/react-query";
 
 import { useAuth } from "@/lib/auth-context";
+import { matchKeys } from "./use-matches";
 import {
   cancelMyItem,
   closeMyItem,
@@ -152,16 +153,20 @@ export function useMyItems(listingType?: "LOST" | "FOUND"): UseQueryResult<Listi
  *
  * Deliberately coarse within the listing domain and no wider: discovery, the
  * caller's own reports and the affected detail all change together
- * (docs/apiAndDataContracts.md §126, §127). Nothing outside `["listings"]` is
- * touched.
+ * (docs/apiAndDataContracts.md §126, §127). Matching-relevant writes also
+ * refresh matches because the backend trigger may create or expire pairs.
  */
-function useInvalidateListings() {
+function useInvalidateListings(matchRelevant = false) {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: listingKeys.all });
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: listingKeys.all }),
+      ...(matchRelevant ? [queryClient.invalidateQueries({ queryKey: matchKeys.all })] : []),
+    ]);
 }
 
 export function useCreateLostItem() {
-  const invalidate = useInvalidateListings();
+  const invalidate = useInvalidateListings(true);
 
   return useMutation<CreateListingResult, Error, { input: CreateLostReportInput; images?: File[] }>(
     {
@@ -174,7 +179,7 @@ export function useCreateLostItem() {
 }
 
 export function useCreateFoundItem() {
-  const invalidate = useInvalidateListings();
+  const invalidate = useInvalidateListings(true);
 
   return useMutation<
     CreateListingResult,
@@ -188,7 +193,7 @@ export function useCreateFoundItem() {
 }
 
 export function useUpdateItem() {
-  const invalidate = useInvalidateListings();
+  const invalidate = useInvalidateListings(true);
 
   return useMutation<void, Error, { itemId: string; input: UpdateListingInput }>({
     mutationFn: ({ itemId, input }) => updateMyItem(itemId, input),
@@ -197,7 +202,7 @@ export function useUpdateItem() {
 }
 
 export function useCloseItem() {
-  const invalidate = useInvalidateListings();
+  const invalidate = useInvalidateListings(true);
 
   return useMutation<void, Error, { itemId: string; reason?: string | null }>({
     mutationFn: ({ itemId, reason }) => closeMyItem(itemId, reason),
@@ -206,7 +211,7 @@ export function useCloseItem() {
 }
 
 export function useCancelItem() {
-  const invalidate = useInvalidateListings();
+  const invalidate = useInvalidateListings(true);
 
   return useMutation<void, Error, { itemId: string; reason?: string | null }>({
     mutationFn: ({ itemId, reason }) => cancelMyItem(itemId, reason),

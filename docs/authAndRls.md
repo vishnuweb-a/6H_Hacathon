@@ -818,11 +818,7 @@ or other trusted backend logic.
 
 ## UPDATE
 
-Users may only perform limited actions such as:
-
-```text
-Dismiss Match
-```
+Clients have no UPDATE privilege or policy on `matches`. Dismissal is a user-scoped write to `match_dismissals`, not a match lifecycle transition.
 
 Prefer controlled function:
 
@@ -837,6 +833,12 @@ rather than broad direct updates.
 ## DELETE
 
 Not exposed to ordinary users.
+
+---
+
+# 27.1. Match Dismissal RLS (Phase 4 refinement)
+
+On `match_dismissals`, authenticated users can SELECT and DELETE only rows where `user_id = auth.uid()`. INSERT additionally requires actual participation in the referenced match. No UPDATE access; anon gets no access. `dismiss_match(p_match_id)` and `restore_match(p_match_id)` derive identity from `auth.uid()` and are idempotent. One participant cannot read, create, or delete another participant’s dismissal. The shared pair remains visible to the other participant.
 
 ---
 

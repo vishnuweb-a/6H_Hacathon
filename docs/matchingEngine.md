@@ -195,6 +195,8 @@ color
 
 description
 
+title
+
 event_date
 
 event_time
@@ -1317,25 +1319,25 @@ Candidate is currently valid and visible.
 
 # 51. DISMISSED
 
-Used when a user indicates:
+Reserved for global backend invalidation. A participant indicating:
 
 ```text
 Not My Item
 ```
 
-The match should no longer appear in normal results.
+writes `match_dismissals(match_id, auth.uid())`. The match no longer appears in that participant’s normal results; the other participant still sees it and `matches.status` is unchanged.
 
 ---
 
 # 52. CLAIMED
 
-When a claim is created from the match:
+Only when a claim is ACCEPTED and recovery begins:
 
 ```text
 match.status = CLAIMED
 ```
 
-This improves traceability.
+Pending claim submission must not set CLAIMED. Phase 4 never sets CLAIMED.
 
 ---
 
@@ -1363,7 +1365,8 @@ dismiss_match(match_id)
       ↓
 Verify user owns one side
       ↓
-status = DISMISSED
+Insert own match_dismissals row
+Shared matches.status unchanged
 ```
 
 ---
@@ -1372,7 +1375,7 @@ status = DISMISSED
 
 A dismissed match should not immediately reappear after routine recalculation.
 
-Keep dismissal state unless:
+Phase 4 keeps each user’s dismissal across every recalculation until that user explicitly restores it. A future reconsideration policy may be introduced only deliberately, for example when:
 
 ```text
 significant listing changes occur

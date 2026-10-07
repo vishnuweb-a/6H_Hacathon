@@ -21,6 +21,9 @@ import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { Page, Badge, Tabs, TrustNote } from "./kept-shared";
 import { MyListings } from "./kept-my-listings";
+import { ListingErrorState } from "./kept-listing-ui";
+import { MatchCard, MatchEmptyState, MatchListSkeleton } from "./kept-match-ui";
+import { useDismissMatch, useMyMatches } from "@/hooks/use-matches";
 import { useKept } from "@/lib/kept-context";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -202,8 +205,64 @@ function ProfileEditor({
   );
 }
 
+/**
+ * The Activity "Possible Matches" tab, on real backend data.
+ *
+ * No PreviewNotice here any more: matching is live, so labelling it a preview
+ * would now be false. The claims, recovery and returns tabs keep their notices
+ * because those phases genuinely do not exist yet (task §36).
+ */
+function ActivityMatches() {
+  const { data: matches, isPending, isError, refetch } = useMyMatches();
+  const dismiss = useDismissMatch();
+
+  if (isPending) return <MatchListSkeleton count={2} />;
+
+  if (isError) {
+    return (
+      <ListingErrorState
+        title="We could not load your matches."
+        description="Your reports are safe. This was a problem fetching the comparison results."
+        onRetry={() => void refetch()}
+      />
+    );
+  }
+
+  if (!matches || matches.length === 0) {
+    return (
+      <MatchEmptyState
+        action={
+          <Button asChild variant="pink">
+            <Link to="/post/lost">
+              Report a lost item <ArrowUpRight />
+            </Link>
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="grid gap-5">
+      {dismiss.isError && (
+        <p role="alert" className="text-sm text-destructive">
+          We could not hide that match. Please try again.
+        </p>
+      )}
+      {matches.map((match) => (
+        <MatchCard
+          key={match.id}
+          match={match}
+          onDismiss={(matchId) => dismiss.mutate({ matchId })}
+          isDismissing={dismiss.isPending && dismiss.variables?.matchId === match.id}
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ActivityPage() {
-  // Listings are real. Claims, matches, recoveries and returns remain mock until
+  // Listings and matches are real. Claims, recoveries and returns remain mock until
   // their own phases — they are labelled as a preview in the UI below so a visitor
   // cannot read them as backend truth.
   const { claims, handedOver, received } = useKept();
@@ -252,24 +311,7 @@ export function ActivityPage() {
       {tab === "My Lost Reports" || tab === "My Found Listings" ? (
         <MyListings listingType={tab === "My Lost Reports" ? "LOST" : "FOUND"} />
       ) : tab === "Possible Matches" ? (
-        <div className="grid gap-5">
-          <PreviewNotice feature="Matching" />
-          {[items[0], items[5]].map((i, n) => (
-            <Link
-              key={i.id}
-              to="/listing/$id"
-              params={{ id: i.id }}
-              className="panel p-5 flex items-center gap-5"
-            >
-              <img src={i.image} alt={i.title} className="w-20 h-20 object-cover" />
-              <div className="flex-1">
-                <Badge>{n ? "Strong" : "Very Strong"} match</Badge>
-                <h2 className="text-xl font-bold mt-2">{i.title}</h2>
-              </div>
-              <ArrowRight />
-            </Link>
-          ))}
-        </div>
+        <ActivityMatches />
       ) : tab === "Claims Sent" || tab === "Claims Received" ? (
         <div className="grid gap-4">
           <PreviewNotice feature="Claims" />

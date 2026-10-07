@@ -103,6 +103,12 @@ async function loadImagesForItems(itemIds: string[]): Promise<Map<string, Listin
   return byItem;
 }
 
+/** Public-safe cover photos for authorized listings, using the existing batch loader. */
+export async function getListingCoverUrls(itemIds: string[]): Promise<Map<string, string | null>> {
+  const images = await loadImagesForItems([...new Set(itemIds)]);
+  return new Map([...images].map(([itemId, photos]) => [itemId, photos[0]?.url ?? null]));
+}
+
 /**
  * Display names for a set of creators in one query, for the card trust row.
  * Batched rather than per-card to avoid an N+1

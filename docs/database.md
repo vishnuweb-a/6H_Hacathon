@@ -1198,6 +1198,14 @@ default ACTIVE
 
 ---
 
+# 25.1. Per-user Match Dismissals (Phase 4 refinement)
+
+`public.match_dismissals` stores `match_id uuid not null references matches(id) on delete cascade`, `user_id uuid not null references profiles(id) on delete cascade`, and `created_at timestamptz not null default now()`. Its primary key is `(match_id, user_id)`; an index on `user_id` supports user-scoped reads. Enable RLS in the creating migration.
+
+A dismissal hides a pair for the calling participant only. It never changes `matches.status` or the other participant’s visibility. Routine recalculation and significant edits preserve dismissals until that user explicitly restores the pair. Global `DISMISSED` is reserved for backend invalidation. `CLAIMED` is set only after claim acceptance / recovery begins, never for a pending claim and never by Phase 4 matching.
+
+---
+
 # 26. Match Unique Constraint
 
 Critical:

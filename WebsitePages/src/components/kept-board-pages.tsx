@@ -25,7 +25,7 @@ import {
   ListingEmptyState,
   listingDateLabel,
 } from "./kept-listing-ui";
-import { items, dateLabel } from "@/lib/kept-data";
+import { items } from "@/lib/kept-data";
 import { useAuth } from "@/lib/auth-context";
 import {
   useExploreItems,
@@ -33,6 +33,13 @@ import {
   useItem,
   useMyItemDetail,
 } from "@/hooks/use-listings";
+import { useDismissMatch, useMatchesForItem, useMyMatches } from "@/hooks/use-matches";
+import {
+  MATCH_FILTER_OPTIONS,
+  MATCH_STRENGTH_LABELS,
+  type MatchStrengthFilter,
+} from "@/lib/services/match-types";
+import { MatchCard, MatchEmptyState, MatchListSkeleton, MatchPreviewCard } from "./kept-match-ui";
 import {
   clearedExploreSearch,
   hasActiveExploreFilters,
@@ -57,6 +64,56 @@ import {
  * four-row page rather than a full Explore page it would then throw away.
  */
 const HOME_STRIP_SIZE = 4;
+
+/**
+ * The Home "These might be yours" preview, on real match data.
+ *
+ * A bounded query: Home shows at most the two strongest matches and links to the
+ * full screen, so the landing page never pulls the whole list (task §35). Loading, empty and retry states occupy the same approved preview area.
+ */
+function HomeMatchPreview() {
+  const { data: matches, isPending, isError, refetch } = useMyMatches({ limit: 2 });
+
+  if (isPending) {
+    return (
+      <>
+        <Skeleton className="h-40" />
+        <Skeleton className="h-40" />
+      </>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="md:col-span-2">
+        <ListingErrorState title="We could not load your matches." onRetry={() => void refetch()} />
+      </div>
+    );
+  }
+
+  if (!matches || matches.length === 0) {
+    return (
+      <div className="panel p-5 md:col-span-2 bg-paper grid place-content-center text-center">
+        <p className="font-bold">No matches to show yet.</p>
+        <p className="text-sm text-muted-foreground mt-2 max-w-sm">
+          Post a report and we will compare it against every new listing as it arrives.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {matches.slice(0, 2).map((match, index) => (
+        <MatchPreviewCard
+          key={match.id}
+          match={match}
+          tone={index ? "bg-purple/15" : "bg-pink/20"}
+        />
+      ))}
+    </>
+  );
+}
 
 export function HomePage() {
   const [tab, setTab] = useState<ListingType | "ALL">("ALL");
@@ -189,37 +246,7 @@ export function HomePage() {
       <section className="page-width py-11">
         <SectionHeading kicker="A LITTLE FAMILIAR?" title="These might be yours." to="/matches" />
         <div className="grid md:grid-cols-[1fr_1fr_0.85fr] gap-5">
-          {[items[0], items[5]].map((item, i) => (
-            <Link
-              key={item.id}
-              to="/listing/$id"
-              params={{ id: item.id }}
-              className="panel p-4 flex gap-4 bg-paper"
-            >
-              <div className={`w-28 h-32 shrink-0 ${i ? "bg-purple/15" : "bg-pink/20"}`}>
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="item-photo"
-                  width={512}
-                  height={512}
-                  loading="lazy"
-                />
-              </div>
-              <div className="flex flex-col justify-between">
-                <Badge tone={i ? "orange" : "lime"}>
-                  <Sparkles size={11} />
-                  {i ? "POSSIBLE MATCH" : "STRONG MATCH"}
-                </Badge>
-                <h3 className="font-bold text-lg mt-2">{item.title}</h3>
-                <p className="text-xs flex gap-1 items-center mt-2">
-                  <MapPin size={12} />
-                  {item.location}
-                </p>
-                <span className="text-xs underline mt-3 font-bold">Take a closer look ↗</span>
-              </div>
-            </Link>
-          ))}
+          <HomeMatchPreview />
           <div className="bg-purple text-primary-foreground border-2 border-foreground p-5 relative">
             <Sparkles className="absolute top-4 right-4" size={26} />
             <p className="eyebrow mb-3">YOUR THINGS MISS YOU, TOO.</p>
@@ -802,6 +829,7 @@ export function ListingPage({ id }: { id: string }) {
                   </ol>
                 </div>
               )}
+              <ListingMatchSection itemId={listing.id} />
               <Button asChild variant="outline" size="lg" className="w-full">
                 <Link to="/activity">Manage this listing</Link>
               </Button>
@@ -833,8 +861,85 @@ export function ListingPage({ id }: { id: string }) {
   );
 }
 
+/**
+ * The owner-only possible-match section on a listing detail (task §37).
+ *
+ * Shown only to the listing's owner, because `get_matches_for_item()` requires
+ * ownership — a visitor browsing the public board is not told how many matches
+ * somebody else's report has.
+ *
+ * It offers "View match" and nothing more. There is deliberately NO claim action
+ * here: claiming is Phase 5, and a match is not a claim (docs/matchingEngine.md
+ * §110 — matching stops at "potential match" and the claim system takes over).
+ * Loading, empty and error states keep the owner informed without hiding failures.
+ */
+function ListingMatchSection({ itemId }: { itemId: string }) {
+  const { data: matches, isPending, isError, refetch } = useMatchesForItem(itemId, { limit: 3 });
+
+  if (isPending) return <MatchListSkeleton count={1} />;
+  if (isError) {
+    return (
+      <ListingErrorState title="We could not load your matches." onRetry={() => void refetch()} />
+    );
+  }
+  if (!matches || matches.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">No possible matches for this report yet.</p>
+    );
+  }
+
+  return (
+    <div className="border-2 border-foreground p-4">
+      <Badge tone="lime">
+        <Sparkles size={11} aria-hidden="true" />
+        {matches.length === 1 ? "1 POSSIBLE MATCH" : `${matches.length} POSSIBLE MATCHES`}
+      </Badge>
+      <ul className="grid gap-3 mt-4">
+        {matches.map((match) => (
+          <li key={match.id} className="flex items-center gap-3">
+            <span className="font-extrabold text-lg w-14 shrink-0">{match.displayScore}%</span>
+            <span className="flex-1 min-w-0">
+              <span className="font-bold block truncate">{match.otherListing.title}</span>
+              <span className="text-xs text-muted-foreground">
+                {MATCH_STRENGTH_LABELS[match.strength]}
+              </span>
+            </span>
+            <Link
+              to="/listing/$id"
+              params={{ id: match.otherListing.id }}
+              className="subtle-link shrink-0 text-xs font-bold"
+            >
+              View match ↗
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="eyebrow text-muted-foreground mt-4">SIMILARITY, NOT OWNERSHIP</p>
+    </div>
+  );
+}
+
+/**
+ * The Matches screen, on real backend data.
+ *
+ * The approved visuals are unchanged — the same tabs, panels, badge tones, score
+ * block and trust note. What changed is the source: ranked rows from
+ * `get_my_matches()` instead of three hand-picked demo items.
+ *
+ * The score, the strength band and the display threshold are all decided by the
+ * database. This component ranks nothing and computes no score (AGENTS.md: never
+ * calculate an authoritative match score in the frontend).
+ */
 export function MatchesPage() {
-  const [tab, setTab] = useState("All matches");
+  const search = useSearch({ from: "/matches" });
+  const navigate = useNavigate({ from: "/matches" });
+  const filter: MatchStrengthFilter = search.strength ?? "ALL";
+  const { data: matches, isPending, isError, refetch } = useMyMatches({ strength: filter });
+  const dismiss = useDismissMatch();
+
+  const tabLabel =
+    MATCH_FILTER_OPTIONS.find((option) => option.value === filter)?.label ?? "All matches";
+
   return (
     <Page
       eyebrow="A LITTLE FAMILIAR? / MATCHES"
@@ -842,59 +947,56 @@ export function MatchesPage() {
       description="Possible matches for your reports. Similarity is a clue, not proof of ownership."
     >
       <Tabs
-        options={["All matches", "Very strong", "Strong", "Possible"]}
-        value={tab}
-        onChange={setTab}
+        options={MATCH_FILTER_OPTIONS.map((option) => option.label)}
+        value={tabLabel}
+        onChange={(label) => {
+          const next = MATCH_FILTER_OPTIONS.find((option) => option.label === label);
+          if (next) {
+            void navigate({
+              search: next.value === "ALL" ? {} : { strength: next.value },
+              replace: true,
+            });
+          }
+        }}
       />
-      <div className="grid gap-5">
-        {[items[0], items[5], items[2]].map((item, i) => {
-          const ranks = ["Very strong", "Strong", "Possible"];
-          if (tab !== "All matches" && tab !== ranks[i]) return null;
-          return (
-            <div
-              key={item.id}
-              className="panel p-5 grid md:grid-cols-[160px_1fr_180px] gap-6 items-center"
-            >
-              <div className="h-40 bg-mint/30">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="item-photo"
-                  width={512}
-                  height={512}
-                />
-              </div>
-              <div>
-                <Badge tone={i === 0 ? "lime" : i === 1 ? "mint" : "orange"}>
-                  {ranks[i]} match
-                </Badge>
-                <h2 className="text-2xl font-bold mt-3">{item.title}</h2>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Found near {item.location} · {dateLabel(item.date)}
-                </p>
-                <div className="flex flex-wrap gap-3 mt-4 eyebrow">
-                  <span>✓ Category</span>
-                  <span>✓ Nearby location</span>
-                  <span>✓ Date overlaps</span>
-                  <span>≈ Description</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-5xl font-extrabold">
-                  {[94, 82, 68][i]}
-                  <span className="text-xl">%</span>
-                </p>
-                <p className="eyebrow mt-1 mb-5">SIMILARITY, NOT OWNERSHIP</p>
-                <Button asChild variant="lime">
-                  <Link to="/listing/$id" params={{ id: item.id }}>
-                    See item <ArrowUpRight />
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+
+      {isPending ? (
+        <MatchListSkeleton />
+      ) : isError ? (
+        <ListingErrorState
+          title="We could not load your matches."
+          description="Your reports are safe. This was a problem fetching the comparison results."
+          onRetry={() => void refetch()}
+        />
+      ) : !matches || matches.length === 0 ? (
+        <MatchEmptyState
+          action={
+            <Button asChild variant="pink">
+              <Link to="/post/lost">
+                Report a lost item <ArrowUpRight />
+              </Link>
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-5">
+          {matches.map((match) => (
+            <MatchCard
+              key={match.id}
+              match={match}
+              onDismiss={(matchId) => dismiss.mutate({ matchId })}
+              isDismissing={dismiss.isPending && dismiss.variables?.matchId === match.id}
+            />
+          ))}
+        </div>
+      )}
+
+      {dismiss.isError && (
+        <p className="mt-4 text-sm font-semibold text-destructive" role="alert">
+          We could not hide that match. Please try again.
+        </p>
+      )}
+
       <div className="mt-6">
         <TrustNote>
           A person checks your private answers before a claim can be accepted. No automatic

@@ -84,7 +84,7 @@ set local request.jwt.claims = '{"sub": "11111111-1111-1111-1111-111111111111", 
 
 -- SELECT: a signed-in user may read public-safe profile data.
 select is(
-  (select count(*)::int from public.profiles),
+  (select count(id)::int from public.profiles),
   2,
   'user A can read profiles for the community'
 );
@@ -167,11 +167,11 @@ reset role;
 set local role anon;
 set local request.jwt.claims = '{"role": "anon"}';
 
--- docs/authAndRls.md §105: anonymous users get landing/login only in the MVP, so
--- there is no anon SELECT policy and reads return nothing.
-select is(
-  (select count(*)::int from public.profiles),
-  0,
+-- Anonymous access is denied at the grant layer as well as by RLS.
+select throws_ok(
+  $$ select id from public.profiles $$,
+  '42501',
+  null,
   'anonymous users cannot read profiles'
 );
 

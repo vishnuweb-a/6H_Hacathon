@@ -766,11 +766,23 @@ interface MatchSummary {
   strength: MatchStrength;
   status: MatchStatus;
   matchedSignals: MatchSignal[];
-  lostItem: ListingSummary;
-  foundItem: ListingSummary;
+  otherListing: MatchedListing; // public-safe opposite side, no coordinates/evidence
+  myItemId: UUID;
+  myItemTitle: string;
+  isDismissed: boolean; // calling user only
+  displayScore: number; // whole-percent rounding, no score recalculation
+  categoryScore: number | null;
+  locationScore: number | null;
+  timeScore: number | null;
+  descriptionScore: number | null;
+  updatedAt: string;
   createdAt: string;
 }
 ```
+
+---
+
+Reads use authenticated RPCs `get_my_matches(p_strength?, p_include_dismissed?, p_limit?, p_item_id?)` and `get_matches_for_item(p_item_id, p_limit?)`. The optional item filter applies before ranking/limit and requires ownership. Only ACTIVE pairs between ACTIVE listings with score >= 60 are returned, ordered by score DESC, created_at DESC, id ASC; the maximum is 20. The opposite listing projection includes id, type, title, category, brand, color, description, event date/time, approximate location text, status, and user id. No coordinates, distance, or private evidence. The listing service enriches `otherListing.coverImageUrl: string | null` through its existing batched, RLS-protected image loader and signed URLs; missing or failed media uses the approved image fallback.
 
 ---
 
@@ -813,15 +825,10 @@ Only safe signals should be exposed.
 # 35. Match Detail DTO
 
 ```ts
-interface MatchDetail extends MatchSummary {
-  categoryScore?: number;
-  locationScore?: number;
-  timeScore?: number;
-  descriptionScore?: number;
-}
+type MatchDetail = MatchSummary; // Phase 4 already includes nullable component scores
 ```
 
-Whether component scores are exposed is optional.
+Phase 4 includes nullable component scores in its safe read DTO; unavailable signals remain null.
 
 The UI does not require all internal scoring details.
 
@@ -848,9 +855,15 @@ dismiss_match(match_id)
 ```ts
 interface DismissMatchResult {
   matchId: UUID;
-  status: "DISMISSED";
+  status: "DISMISSED"; // caller’s view, NOT matches.status
 }
 ```
+
+---
+
+# 37.1. Match Dismissal Semantics (Phase 4)
+
+Dismissal writes `match_dismissals(match_id, auth.uid())` and hides only the calling participant’s view. It leaves shared status/scores unchanged, survives recalculation, and is idempotent. `restore_match(p_match_id)` deletes only the caller’s dismissal and returns `{ matchId, status: "ACTIVE" }` describing that user’s view; it does not reactivate an expired global pair. `CLAIMED` requires future claim ACCEPTANCE / recovery creation, never a pending claim or Phase 4 generation.
 
 ---
 

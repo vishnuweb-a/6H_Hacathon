@@ -1909,10 +1909,11 @@ Not My Item
 Then:
 
 ```text
-match.status = DISMISSED
+Insert match_dismissals(match_id, auth.uid())
+Hide only for this participant; shared match.status unchanged
 ```
 
-The same pairing should not be repeatedly surfaced unless substantial listing information changes.
+The same pairing stays hidden for this participant across recalculation and edits until they restore it. The other participant can still see it.
 
 ---
 

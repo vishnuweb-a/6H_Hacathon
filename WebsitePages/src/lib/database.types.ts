@@ -6,31 +6,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.18";
   };
-  graphql_public: {
-    Tables: {
-      [_ in never]: never;
-    };
-    Views: {
-      [_ in never]: never;
-    };
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json;
-          operationName?: string;
-          query?: string;
-          variables?: Json;
-        };
-        Returns: Json;
-      };
-    };
-    Enums: {
-      [_ in never]: never;
-    };
-    CompositeTypes: {
-      [_ in never]: never;
-    };
-  };
   public: {
     Tables: {
       found_item_private_details: {
@@ -235,6 +210,117 @@ export type Database = {
             foreignKeyName: "lost_item_private_details_item_id_fkey";
             columns: ["item_id"];
             isOneToOne: true;
+            referencedRelation: "public_items_view";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      match_dismissals: {
+        Row: {
+          created_at: string;
+          match_id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          match_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          match_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "match_dismissals_match_id_fkey";
+            columns: ["match_id"];
+            isOneToOne: false;
+            referencedRelation: "matches";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "match_dismissals_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "match_dismissals_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "public_profiles_view";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      matches: {
+        Row: {
+          category_score: number | null;
+          created_at: string;
+          description_score: number | null;
+          found_item_id: string;
+          id: string;
+          location_score: number | null;
+          lost_item_id: string;
+          overall_score: number;
+          status: Database["public"]["Enums"]["match_status"];
+          time_score: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          category_score?: number | null;
+          created_at?: string;
+          description_score?: number | null;
+          found_item_id: string;
+          id?: string;
+          location_score?: number | null;
+          lost_item_id: string;
+          overall_score: number;
+          status?: Database["public"]["Enums"]["match_status"];
+          time_score?: number | null;
+          updated_at?: string;
+        };
+        Update: {
+          category_score?: number | null;
+          created_at?: string;
+          description_score?: number | null;
+          found_item_id?: string;
+          id?: string;
+          location_score?: number | null;
+          lost_item_id?: string;
+          overall_score?: number;
+          status?: Database["public"]["Enums"]["match_status"];
+          time_score?: number | null;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "matches_found_item_id_fkey";
+            columns: ["found_item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "matches_found_item_id_fkey";
+            columns: ["found_item_id"];
+            isOneToOne: false;
+            referencedRelation: "public_items_view";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "matches_lost_item_id_fkey";
+            columns: ["lost_item_id"];
+            isOneToOne: false;
+            referencedRelation: "items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "matches_lost_item_id_fkey";
+            columns: ["lost_item_id"];
+            isOneToOne: false;
             referencedRelation: "public_items_view";
             referencedColumns: ["id"];
           },
@@ -453,6 +539,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      category_compatibility_map: { Args: never; Returns: Json };
       close_my_item: {
         Args: { p_item_id: string; p_reason?: string };
         Returns: {
@@ -481,6 +568,41 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      dismiss_match: { Args: { p_match_id: string }; Returns: Json };
+      generate_matches: { Args: { p_item_id: string }; Returns: Json };
+      get_matches_for_item: {
+        Args: { p_item_id: string; p_limit?: number };
+        Returns: {
+          category_score: number;
+          created_at: string;
+          description_score: number;
+          found_item_id: string;
+          id: string;
+          is_dismissed: boolean;
+          location_score: number;
+          lost_item_id: string;
+          matched_signals: string[];
+          my_item_id: string;
+          my_item_title: string;
+          other_brand: string;
+          other_category: string;
+          other_color: string;
+          other_description: string;
+          other_event_date: string;
+          other_event_time: string;
+          other_item_id: string;
+          other_listing_type: Database["public"]["Enums"]["listing_type"];
+          other_location_text: string;
+          other_status: Database["public"]["Enums"]["listing_status"];
+          other_title: string;
+          other_user_id: string;
+          overall_score: number;
+          status: Database["public"]["Enums"]["match_status"];
+          strength: string;
+          time_score: number;
+          updated_at: string;
+        }[];
       };
       get_my_item_detail: {
         Args: { p_item_id: string };
@@ -511,6 +633,123 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      get_my_matches: {
+        Args: {
+          p_include_dismissed?: boolean;
+          p_item_id?: string;
+          p_limit?: number;
+          p_strength?: string;
+        };
+        Returns: {
+          category_score: number;
+          created_at: string;
+          description_score: number;
+          found_item_id: string;
+          id: string;
+          is_dismissed: boolean;
+          location_score: number;
+          lost_item_id: string;
+          matched_signals: string[];
+          my_item_id: string;
+          my_item_title: string;
+          other_brand: string;
+          other_category: string;
+          other_color: string;
+          other_description: string;
+          other_event_date: string;
+          other_event_time: string;
+          other_item_id: string;
+          other_listing_type: Database["public"]["Enums"]["listing_type"];
+          other_location_text: string;
+          other_status: Database["public"]["Enums"]["listing_status"];
+          other_title: string;
+          other_user_id: string;
+          overall_score: number;
+          status: Database["public"]["Enums"]["match_status"];
+          strength: string;
+          time_score: number;
+          updated_at: string;
+        }[];
+      };
+      haversine_km: {
+        Args: { p_lat1: number; p_lat2: number; p_lon1: number; p_lon2: number };
+        Returns: number;
+      };
+      match_attribute_score: {
+        Args: { p_left: string; p_right: string };
+        Returns: number;
+      };
+      match_category_score: {
+        Args: { p_found_category: string; p_lost_category: string };
+        Returns: number;
+      };
+      match_date_score: {
+        Args: { p_found_date: string; p_lost_date: string };
+        Returns: number;
+      };
+      match_description_score: {
+        Args: {
+          p_found_brand: string;
+          p_found_color: string;
+          p_found_description: string;
+          p_found_title: string;
+          p_lost_brand: string;
+          p_lost_color: string;
+          p_lost_description: string;
+          p_lost_title: string;
+        };
+        Returns: number;
+      };
+      match_location_score: {
+        Args: {
+          p_found_lat: number;
+          p_found_location_text: string;
+          p_found_lon: number;
+          p_lost_lat: number;
+          p_lost_location_text: string;
+          p_lost_lon: number;
+        };
+        Returns: number;
+      };
+      match_location_score_from_km: { Args: { p_km: number }; Returns: number };
+      match_overall_score: {
+        Args: {
+          p_category_score: number;
+          p_description_score: number;
+          p_location_score: number;
+          p_time_score: number;
+        };
+        Returns: number;
+      };
+      match_signals: {
+        Args: {
+          p_category_score: number;
+          p_description_score: number;
+          p_location_score: number;
+          p_time_score: number;
+        };
+        Returns: string[];
+      };
+      match_strength: { Args: { p_overall_score: number }; Returns: string };
+      match_time_proximity_score: {
+        Args: { p_found_time: string; p_lost_time: string };
+        Returns: number;
+      };
+      match_time_score: {
+        Args: {
+          p_found_date: string;
+          p_found_time: string;
+          p_lost_date: string;
+          p_lost_time: string;
+        };
+        Returns: number;
+      };
+      matching_config: { Args: never; Returns: Json };
+      matching_stopwords: { Args: never; Returns: string[] };
+      matching_synonyms: { Args: never; Returns: Json };
+      matching_tokens: { Args: { p_text: string }; Returns: string[] };
+      normalize_matching_text: { Args: { p_text: string }; Returns: string };
+      restore_match: { Args: { p_match_id: string }; Returns: Json };
       search_public_items: {
         Args: {
           p_category?: string;
@@ -553,6 +792,10 @@ export type Database = {
         Returns: string;
       };
       storage_path_item_id: { Args: { p_name: string }; Returns: string };
+      token_overlap_score: {
+        Args: { p_left: string; p_right: string };
+        Returns: number;
+      };
       update_my_profile: {
         Args: {
           p_avatar_url?: string;
@@ -581,10 +824,15 @@ export type Database = {
         };
       };
       user_owns_item: { Args: { p_item_id: string }; Returns: boolean };
+      user_participates_in_match: {
+        Args: { p_match_id: string };
+        Returns: boolean;
+      };
     };
     Enums: {
       listing_status: "ACTIVE" | "RECOVERY_IN_PROGRESS" | "RETURNED" | "CLOSED" | "CANCELLED";
       listing_type: "LOST" | "FOUND";
+      match_status: "ACTIVE" | "DISMISSED" | "CLAIMED" | "EXPIRED";
     };
     CompositeTypes: {
       [_ in never]: never;
@@ -704,13 +952,11 @@ export type CompositeTypes<
     : never;
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       listing_status: ["ACTIVE", "RECOVERY_IN_PROGRESS", "RETURNED", "CLOSED", "CANCELLED"],
       listing_type: ["LOST", "FOUND"],
+      match_status: ["ACTIVE", "DISMISSED", "CLAIMED", "EXPIRED"],
     },
   },
 } as const;
